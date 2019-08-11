@@ -14,6 +14,8 @@ import os
 import pylab as plt 
 from sklearn.linear_model import LinearRegression
 from bioch_sim import *
+import bioch_sim as bs
+from aux_th import *
 
 BRIE_dir = os.path.join("/home","timur","ext","working_dir","PRJEB15062", "BRIE_output")
 
@@ -235,10 +237,16 @@ def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
     for ness_col in ness_cols:
         if ness_col not in df:
             raise ValueError("DataFrame must contain following columns:", ness_col)
-    
-    
     if ax == None:
         fig, ax = plt.subplots(1,3, squeeze= True)
+        
+    #calculate Bimodality:
+    if not df.columns.contains("Bscore"):
+        df["Bscore"] = [bs.get_bimodal_score(a, tendency=True) for a in df.loc[:,(slice(None),"PSI")].values ]
+    if not df.columns.contains("mean"):
+        df["mean"] = [np.nanmean(a) for a in df.loc[:,(slice(None),"PSI")].values ]
+    if not df.columns.contains("std"):
+        df["std"] = [np.nanstd(a) for a in df.loc[:,(slice(None),"PSI")].values ]
 #    df.set_index("ID", inplace = True)
     sorted_df = df.sort_values("Bscore", ascending = False)
     
@@ -249,9 +257,9 @@ def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
     ax[0].set_title("SD over PSI")
     ax[0].set_xlabel("mean(PSI)")
     ax[0].set_ylabel("SD(PSI)")
-    means = sorted_df.iloc[:best_n, list(df).index("mean")]
-    stds = sorted_df.iloc[:best_n, list(df).index("std")]
-    names  = sorted_df.iloc[:best_n, list(df).index("ID")]
+    means = sorted_df["mean"].values
+    stds = sorted_df["std"].values
+    names  = sorted_df.index.values
     ax[0].plot(means, stds, ".", c = "red", label="High Bscore")
     ax[0].legend()
     
@@ -259,13 +267,13 @@ def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
     ax[1].set_title("Bscore distribution")
     ax[1].set_xlabel("Bscore")
     
-    plot_hist(sorted_df.iloc[0, list(df).index("PSI_values")], ax= ax[2])
-    ax[2].set_title("Best Bimodality: %s" % sorted_df.iloc[0, list(df).index("ID")])
+    plot_hist(sorted_df.loc[:,(slice(None),"PSI")].values[0], ax= ax[2])
+    ax[2].set_title("Best Bimodality: %s" % sorted_df.index.values[0])
     ax[2].set_xlabel("PSI")
     ax[2].set_ylabel("cell count")
     
     
-    all_val = np.array([a for a in sorted_df.iloc[:best_n, list(sorted_df).index("PSI_values")].values])
+    all_val = sorted_df.loc[:,(slice(None), "PSI")].values[0:best_n]
     df_bimodal_as = pd.DataFrame(all_val).transpose()
     #heatmap
 #    im = ax[3].imshow(df_bimodal_as.corr())
@@ -286,36 +294,34 @@ def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
         
     ncols = int(np.sqrt(best_n)+1)
     nrows = int(best_n/ncols+1)    
-    if("tpm" in list(df)):
-        intens = np.array([a for a in sorted_df.iloc[:best_n, list(sorted_df).index("tpm")].values])
-        fig = plt.figure()
-        for i in range(best_n):
-            ax = plt.subplot(nrows, ncols, i+1)
-            t_inds = np.where(~np.isnan(all_val[i]) & ~np.isnan(intens[i]))
-            x = np.array(all_val[i][t_inds])
-            y = intens[i][t_inds]
-            ax.plot(all_val[i], intens[i],".")
-            model = LinearRegression()
+    intens = sorted_df.loc[:,(slice(None), "counts")].values[0:best_n]
+    fig = plt.figure()
+    for i in range(best_n):
+        ax = plt.subplot(nrows, ncols, i+1)
+        t_inds = np.where(~np.isnan(all_val[i]) & ~np.isnan(intens[i]))
+        x = np.array(all_val[i][t_inds])
+        y = intens[i][t_inds]
+        ax.plot(all_val[i], intens[i],".")
+        model = LinearRegression()
 #            print(x.reshape((-1, 1)))
-            model.fit(x.reshape((-1, 1)), y)
-            ax.plot(x, model.predict(x.reshape((-1,1))), label = "R2 = %.3f" % model.score(x.reshape((-1,1)), y))
-            ax.legend(fontsize = 10)
-            ax.set_title(names[i], fontsize = 10)
-            ax.set_xlabel("PSI", fontsize =10)
-            ax.set_ylabel("TPM", fontsize =10)
-            ax.tick_params(axis='both', which='major', labelsize=10)
-            ax.tick_params(axis='both', which='minor', labelsize=8)
+        model.fit(x.reshape((-1, 1)), y)
+        ax.plot(x, model.predict(x.reshape((-1,1))), label = "R2 = %.3f" % model.score(x.reshape((-1,1)), y))
+        ax.legend(fontsize = 10)
+        ax.set_title(names[i], fontsize = 10)
+        ax.set_xlabel("PSI", fontsize =10)
+        ax.set_ylabel("counts", fontsize =10)
+        ax.tick_params(axis='both', which='major', labelsize=10)
+        ax.tick_params(axis='both', which='minor', labelsize=8)
             
-    if("tpm" in list(df) and "counts" in list(df)):
-        tpms = np.array([a for a in sorted_df.iloc[:best_n, list(sorted_df).index("tpm")].values])
-        counts = np.array([a for a in sorted_df.iloc[:best_n, list(sorted_df).index("counts")].values])
-        fig = plt.figure()
-        for i in range(best_n):
-            ax = plt.subplot(nrows, ncols, i+1)
-            ax.plot(counts[i], tpms[i],".")
-            ax.set_title(names[i])
-            ax.set_xlabel("counts")
-            ax.set_ylabel("tpms")    
+    fpkms = sorted_df.loc[:,(slice(None),"FPKM")].values[0:best_n]
+    counts = intens
+    fig = plt.figure()
+    for i in range(best_n):
+        ax = plt.subplot(nrows, ncols, i+1)
+        ax.plot(counts[i], fpkms[i],".")
+        ax.set_title(names[i])
+        ax.set_xlabel("counts")
+        ax.set_ylabel("fpkms")    
     
     #search for the best correlation
     corr_values =[]
@@ -352,17 +358,17 @@ def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
         ax.tick_params(axis='both', which='minor', labelsize=8)
         
         ax = plt.subplot(first_n,3 , j+1)
-        ax.hist([tpms[x], tpms[y]], label = [names[x], names[y]])
+        ax.hist([fpkms[x], fpkms[y]], label = [names[x], names[y]])
         ax.legend(fontsize = 10)
-        ax.set_xlabel("tpm")
+        ax.set_xlabel("fpkm")
         ax.tick_params(axis='both', which='major', labelsize=10)
         ax.tick_params(axis='both', which='minor', labelsize=8)
         
         
         ax = plt.subplot(first_n, 3, j+2)
-        ax.plot(all_val[x], tpms[x], ".", label = names[x] )
-        ax.plot(all_val[y], tpms[y], ".", label = names[y] )
-        ax.set_ylabel("TPM", fontsize = 10)
+        ax.plot(all_val[x], fpkms[x], ".", label = names[x] )
+        ax.plot(all_val[y], fpkms[y], ".", label = names[y] )
+        ax.set_ylabel("fpkm", fontsize = 10)
         ax.set_xlabel("PSI", fontsize = 10)
         ax.tick_params(axis='both', which='major', labelsize=10)
         ax.tick_params(axis='both', which='minor', labelsize=8)
