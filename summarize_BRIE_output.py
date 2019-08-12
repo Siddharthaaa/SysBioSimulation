@@ -232,11 +232,6 @@ def _tmp_plot_psi_to_intens(df = None, log = True, th_suppoints = 10 ):
 def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
     
     
-    ness_cols = ["ID", "Bscore", "mean", "std", "PSI_values"]
-    
-    for ness_col in ness_cols:
-        if ness_col not in df:
-            raise ValueError("DataFrame must contain following columns:", ness_col)
     if ax == None:
         fig, ax = plt.subplots(1,3, squeeze= True)
         
@@ -247,7 +242,7 @@ def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
         df["mean"] = [np.nanmean(a) for a in df.loc[:,(slice(None),"PSI")].values ]
     if not df.columns.contains("std"):
         df["std"] = [np.nanstd(a) for a in df.loc[:,(slice(None),"PSI")].values ]
-#    df.set_index("ID", inplace = True)
+
     sorted_df = df.sort_values("Bscore", ascending = False)
     
     if(best_n == None):

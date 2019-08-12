@@ -232,6 +232,10 @@ class SimParam(object):
         self.results = results
         return results
     
+    def simulate_cuda(self, ODE = False, ret_raw=False, max_steps = 1e7):
+        
+        return 0
+    
     def set_result(self, name, res):
         self.results[name] = res
     def get_result(self, name):
