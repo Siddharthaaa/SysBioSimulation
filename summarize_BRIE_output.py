@@ -6,6 +6,8 @@ Created on Wed Aug  7 12:21:14 2019
 @author: timur
 """
 
+import pyopencl as ocl
+
 import numba as nb
 import pandas as pd
 import numpy as np
@@ -15,7 +17,7 @@ import pylab as plt
 from sklearn.linear_model import LinearRegression
 from bioch_sim import *
 import bioch_sim as bs
-from aux_th import *
+import aux_th
 
 BRIE_dir = os.path.join("/home","timur","ext","working_dir","PRJEB15062", "BRIE_output")
 
@@ -47,7 +49,10 @@ def _main():
     summary_df.set_index(cell_df["gene_id"].values, inplace=True)
     df = perform_QC(summary_df, min_counts = 2e5, min_se = 3000, max_share=0.8,
                     top_se_count=130, min_reads=10, min_cells=15)
-    general_analysis(df)
+#    general_analysis(df)
+#    show_splicing_data(df)
+#    _tmp_plot_psi_to_intens(df)
+    
     
     return df
 
@@ -231,7 +236,6 @@ def _tmp_plot_psi_to_intens(df = None, log = True, th_suppoints = 10 ):
 
 def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
     
-    
     if ax == None:
         fig, ax = plt.subplots(1,3, squeeze= True)
         
@@ -252,17 +256,17 @@ def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
     ax[0].set_title("SD over PSI")
     ax[0].set_xlabel("mean(PSI)")
     ax[0].set_ylabel("SD(PSI)")
-    means = sorted_df["mean"].values
-    stds = sorted_df["std"].values
-    names  = sorted_df.index.values
+    means = sorted_df["mean"].values[0:best_n]
+    stds = sorted_df["std"].values[0:best_n]
+    names  = sorted_df.index.values[0:best_n]
     ax[0].plot(means, stds, ".", c = "red", label="High Bscore")
     ax[0].legend()
     
-    ax[1].hist(df["Bscore"])
+    ax[1].hist(df["Bscore"].values)
     ax[1].set_title("Bscore distribution")
     ax[1].set_xlabel("Bscore")
     
-    plot_hist(sorted_df.loc[:,(slice(None),"PSI")].values[0], ax= ax[2])
+    aux_th.plot_hist(sorted_df.loc[:,(slice(None),"PSI")].values[0], ax= ax[2])
     ax[2].set_title("Best Bimodality: %s" % sorted_df.index.values[0])
     ax[2].set_xlabel("PSI")
     ax[2].set_ylabel("cell count")
@@ -274,10 +278,9 @@ def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
 #    im = ax[3].imshow(df_bimodal_as.corr())
 #    cbar = ax[3].figure.colorbar(im, ax=ax[3])
 #    cbar.ax.set_ylabel("Correlation", rotation=-90, va="bottom")
-    from bioch_sim import *
     
     df_corr = df_bimodal_as.corr()
-    im, cbar = heatmap(df_corr,row_labels = names,
+    im, cbar = aux_th.heatmap(df_corr,row_labels = names,
                  col_labels =names , ax = None)
     cbar.ax.set_ylabel("Correlation", rotation=-90, va="bottom")
     val_count = np.empty((best_n, best_n))
@@ -285,7 +288,7 @@ def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
     for k in range(best_n):
         for j in range(best_n):
             val_count[k,j] = (~np.isnan(all_val[k]) & ~np.isnan(all_val[j])).sum() 
-    annotate_heatmap(im, val_count, valfmt="{x:.0f}", fontsize = 10 )
+    aux_th.annotate_heatmap(im, val_count, valfmt="{x:.0f}", fontsize = 10 )
         
     ncols = int(np.sqrt(best_n)+1)
     nrows = int(best_n/ncols+1)    
