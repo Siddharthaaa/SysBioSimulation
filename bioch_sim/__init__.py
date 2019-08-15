@@ -235,32 +235,84 @@ class SimParam(object):
         self.results = results
         return results
     
-    def simulate_cuda(self, params = {"s1": [1,2,3,4,5,6,7,8,9,10]}, max_steps = 1e9):
+    def simulate_cuda(self, params = {"s1": [8,9,10], "s2": [0.4,0.5,0.7]}, max_steps = 1e9):
         #creating param array
         
+        if(not cuda.is_available()):
+            print ("CUDA not available")
+            return None
+        
+        gpus = cuda.gpus
+        dev = cuda.gpus.current
+#        con = cuda.cudadrv.driver.Context(dev, None)
+        con = cuda.current_context()
+        con.reset()
+        mem = con.get_memory_info()
+        
         self.compile_system(dynamic=True)
-        dim1 = len(list(params.values())[0])
+#        dim1 = len(list(params.values())[0])
         
-        threads_per_block = dim1
-        blocks = 1
-        
-        all_params = np.zeros((dim1, len(self.params)), dtype = np.float32)
-        out = np.zeros((dim1, len(self.raster), len(self.init_state)+1 ), dtype=np.float32)
+        dim = ()
         for k,v in params.items():
-            for i, par_i in enumerate(v):
-                all_params[i]= np.fromiter(self.params.values(), dtype= float)
-                ind = list(self.params).index(k)
-                all_params[i][ind] = par_i
+            dim += (len(v), )
+#            for i, par_i in enumerate(v):
         
+        out_dim = dim +  (len(self.raster), len(self.init_state)+1 )
+        
+        mem_estim = np.prod(out_dim) * 8
+        mem_ratio = mem_estim/mem.free
+        print("Mem ration: ", mem_ratio)
+        if( mem_ratio> 0.8):
+            print("Memory need: ", mem_estim, "\nMemory available: ", mem.free)
+            print("Ratio ", mem_ratio, " exceeds ", 0.8 )
+            print("Abort calculation")
+            return None
+        
+        threads_per_block = np.prod(dim)
+        blocks = 1
+        all_params = np.zeros(dim + (len(self.params),), dtype = np.float32)
+#        print(all_params)
+        out = np.zeros((dim +  (len(self.raster), len(self.init_state)+1 )), dtype=np.float32)
+        indx = np.zeros(len(dim), dtype=int)
+        keys, values = list(params.keys()), list(params.values())
+        max_ind = np.array(dim)
+        deep = 0
+        while indx[0] < max_ind[0] and deep >= 0:
+            while indx[deep] < max_ind[deep]:
+                if(deep < len(dim)-1):
+                    deep += 1
+                else:
+#                    print(indx)
+                    all_params[tuple(indx)]= np.fromiter(self.params.values(), dtype= float)
+                    for i, k in enumerate(keys):
+                        ind = list(self.params).index(k)
+#                        print("ind: ", ind)
+#                        print("all_par: ", all_params[indx])
+                        all_params[tuple(indx)][ind] = params[k][indx[i]]
+#                        print("all_par: ", all_params[indx])
+                    indx[deep] += 1
+            indx[deep] = 0
+            deep -= 1
+            indx[deep] += 1
+#        return all_params
+#        for k,v in params.items():
+#            ind = list(self.params).index(k)
+#            for i, par_i in enumerate(v):
+#                all_params[i]= np.fromiter(self.params.values(), dtype= float)
+#                
+#                all_params[i][ind] = par_i
+#        
 #        gpu_test_func = cuda.jit(device=True)(lambda x: x*x)
         reactions = np.array(self.get_reacts(), dtype=np.int32)
         d_reactions = cuda.to_device(reactions)
         d_out = cuda.to_device(out)
+        self.cuda_last_params = all_params
         d_all_params = cuda.to_device(all_params)
-        print(all_params)
+#        print(all_params)
         raster = np.array(self.raster, np.float32)
-        rng_states = create_xoroshiro128p_states(blocks * threads_per_block*2, seed=1)
-        rates_buff = np.zeros((threads_per_block ,len(self.get_reacts())), dtype=np.float64)
+#        rng_states = create_xoroshiro128p_states(blocks * threads_per_block * 2, seed=1)
+        rng_states = create_xoroshiro128p_states(1024, seed=1)
+        rates_buff = np.zeros(dim + (len(self.get_reacts()),), dtype=np.float64)
         d_rates_buff = cuda.to_device(rates_buff)
         
         if not hasattr(self, "compute_stochastic_evolution_cuda"):
@@ -270,55 +322,67 @@ class SimParam(object):
             #    print(state.dtype)
             #    state= np.array(state, dtype = np.int64)
             #    STATE[0,:] = state
-                th_id = cuda.grid(1)
-                STATE=STATES[th_id]
-                constants = constants_all[th_id]
+                
+                th_nr = cuda.grid(2)
+                #TODO 
+                th_n = th_nr[0] * th_nr[1]
+                
+               
+                STATES = STATES[th_nr[0], th_nr[1]]
+                constants_all = constants_all[th_nr[0], th_nr[1]]
+                rates_buff = rates_buff[th_nr[0], th_nr[1]]
+#                if(cuda.blockDim.z > 0):
+#                    STATES = STATES[th_nr[1]]
+#                    constants_all = constants_all[th_nr[0], th_nr[1]]
+#                    rates_buff = rates_buff[th_nr[0], th_nr[1]]
+               
                 tt = 0
                 steps = nb.int64(0)
                 t_ind = steps
                 length = len(time_steps)
-                rates_array = rates_buff[th_id]
+               
+#                rates_buff = cuda.local.array(len(reactions, nb.float64))
                 
                 while steps < max_steps and t_ind < length:
                         
                     # sample two random numbers uniformly between 0 and 1
     #                rr = sp.random.uniform(0,1,2)
-                    r1 = xoroshiro128p_uniform_float64(rng_states, th_id*2)
-                    r2 = xoroshiro128p_uniform_float64(rng_states, th_id*2+0)
-                    gpu_rates_func(STATE[t_ind], constants, rates_array)
+                    r1 = xoroshiro128p_uniform_float64(rng_states, th_n*2)
+                    r2 = xoroshiro128p_uniform_float64(rng_states, th_n*2+1)
+                    gpu_rates_func(STATES[t_ind], constants_all, rates_buff)
     #        #        print(a_s)
                     a_0 = 0.
-                    for i in range(len(rates_array)):
-                        a_0 += rates_array[i]
+                    for i in range(len(rates_buff)):
+                        a_0 += rates_buff[i]
                     # time step: Meine Version
                     #print(a_0)
                     if a_0 == 0:
                         break
                     tt = tt - math.log(1. - r1)/a_0
-                    STATE[t_ind][0] = tt
+                    STATES[t_ind][0] = tt
                     while(tt >= time_steps[t_ind] and t_ind < length):
                         if(t_ind < length-1):
-                            for k in range(len(STATE[t_ind])):
-                                STATE[t_ind+1][k] = STATE[t_ind][k]
+                            for k in range(len(STATES[t_ind])):
+                                STATES[t_ind+1][k] = STATES[t_ind][k]
     #                        STATE[t_ind+1] = STATE[t_ind]
-                        STATE[t_ind,0] = time_steps[t_ind]
+                        STATES[t_ind,0] = time_steps[t_ind]
                         t_ind+=1
                     # find the next reaction
                     prop = r2 * a_0
                     a_sum = 0.
                     ind = 0
-                    for i in range(len(rates_array)):
-                        if prop > a_sum and prop <= rates_array[i]+a_sum:
+                    for i in range(len(rates_buff)):
+                        if prop > a_sum and prop <= rates_buff[i]+a_sum:
                             ind = i
                             break
-                        a_sum += rates_array[i]
+                        a_sum += rates_buff[i]
                         
                     # update the systems state
                     for j, r in enumerate(reactions[ind]):
-                        STATE[t_ind][j+1] += r
+                        STATES[t_ind][j+1] += r
                     steps+=1
             self.compute_stochastic_evolution_cuda = compute_stochastic_evolution_cuda
-        self.compute_stochastic_evolution_cuda[blocks, threads_per_block](d_out,
+        self.compute_stochastic_evolution_cuda[blocks, dim](d_out,
                                              d_reactions, d_rates_buff,
                                              d_all_params, raster, max_steps,
                                              rng_states )

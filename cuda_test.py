@@ -4,6 +4,7 @@ Created on Sun Aug 11 17:41:21 2019
 
 @author: Timur
 """
+
 from pylab import imshow, show
 import pycuda as pc
 from numba import cuda
@@ -22,7 +23,7 @@ d3 = 1.5
 k_syn = 100
 
 name="Test"
-s = bs.SimParam(name,200, 20001,
+s = bs.SimParam(name,200, 1001,
              params = {"v_syn": k_syn, "s1": s1, "s2": s2, "s3": s3, "d0": d0, "d1": d1, "d2": d2, "d3": d3},
              init_state = {"pre_RNA": 0, "Incl": 0, "Skip": 0, "ret": 0})
 
@@ -38,6 +39,10 @@ s.add_reaction("s3*pre_RNA", {"pre_RNA":-1, "ret":1} )
 s.add_reaction("d3*ret",  {"ret": -1} )
 
 s.simulate()
+#sims_n = 4
+#res10 = s.simulate_cuda(params = {"s1": np.ones(sims_n, np.float32),
+#                                  "s2": np.random.uniform(size=sims_n)+1})
+
 #s.plot()
 
 def test_func():
@@ -95,16 +100,17 @@ imshow(out[:,:,1])
 s._rates_function(st, par[0,7], react_rates[0,0])
 print(s.compile_system(dynamic=True))
 
-res = s.simulate_cuda(max_steps = 100000)
-res1 = res[0]
-res2 = res[4]
+#res = s.simulate_cuda({"s1": [1,2,3,4]}, max_steps = 100000)
+res = s.simulate_cuda( max_steps = 100000)
+res1 = res[0,0]
+res2 = res[1,1]
 #print(rates)
 s.plot()
 r = s.results["stoch_rastr"]
 s.results["stoch_rastr"] = res1
 s.plot()
 
-sims_n = 256
+sims_n = 20
 
 start = timer()
 for i in range(sims_n):
@@ -113,6 +119,7 @@ dt = timer() - start
 print(dt, " s")
 
 start = timer()
-res10 = s.simulate_cuda(params = {"s1": np.ones(sims_n, np.float32)})
+res10 = s.simulate_cuda(params = {"s1": np.ones(sims_n, np.float32),
+                                  "s2": np.random.uniform(size=sims_n)+1})
 dt = timer() - start
 print(dt, " s")
