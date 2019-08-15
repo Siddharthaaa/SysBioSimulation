@@ -579,6 +579,7 @@ def get_multimodal_scores(x, max_range=None, scale = 1, exp_maxi=3):
     return (np.array(scores_detailed), np.array((xx, y)), (maxi, mini))
 
 def get_bimodal_score(x, max_range=None, scale = 1, exp_maxi=3, tendency=False):
+    x = x[~np.isnan(x)]
     tend = 0
     if tendency:
         tend = np.std(x)
