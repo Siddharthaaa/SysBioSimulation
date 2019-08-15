@@ -30,6 +30,9 @@ import re
 import numba as nb
 from sklearn.cluster import KMeans, MeanShift, k_means
 
+from numba import cuda
+from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32, xoroshiro128p_uniform_float64
+
 # inline displaying
 #%matplotlib inline
 # settings for plots
@@ -144,7 +147,7 @@ class SimParam(object):
         return res
         
     
-    def compile_system(self, dynamic = False):
+    def compile_system(self, dynamic = True):
         #create reaction matrix
         self._reacts = np.zeros(( len(self._reactions), len(self.init_state)), dtype=int )
         self._state = list(self.init_state.values())
@@ -162,8 +165,8 @@ class SimParam(object):
         func_str= "@nb.njit\n"
 #        func_str= ""
         
-        func_str+= "def _r_f_(st, constants = None):\n"
-        func_str+= "\t_r_s=np.zeros(%d)\n" % len(self._r_s)
+        func_str+= "def _r_f_(st, constants, _r_s):\n"
+#        func_str+= "\t_r_s=np.zeros(%d)\n" % len(self._r_s)
         func_str+= "\tt=st[0]\n"
         i=0
         for func in self._rate_funcs:
@@ -192,11 +195,11 @@ class SimParam(object):
         return func_str
     def simulate(self, ODE = False, ret_raw=False, max_steps = 1e7):
         if not self._is_compiled:
-            self.compile_system()
+            self.compile_system(dynamic=True)
         self._state = list(self.init_state.values())
         self._state.insert(0,0)
         self._state = np.array(self._state, dtype=np.float64)
-        print("simulate " + self.param_str())
+#        print("simulate " + self.param_str())
         results={}
         params = self.get_all_params()
         initial_state = params["init_state"]
@@ -232,9 +235,97 @@ class SimParam(object):
         self.results = results
         return results
     
-    def simulate_cuda(self, ODE = False, ret_raw=False, max_steps = 1e7):
+    def simulate_cuda(self, params = {"s1": [1,2,3,4,5,6,7,8,9,10]}, max_steps = 1e9):
+        #creating param array
         
-        return 0
+        self.compile_system(dynamic=True)
+        dim1 = len(list(params.values())[0])
+        
+        threads_per_block = dim1
+        blocks = 1
+        
+        all_params = np.zeros((dim1, len(self.params)), dtype = np.float32)
+        out = np.zeros((dim1, len(self.raster), len(self.init_state)+1 ), dtype=np.float32)
+        for k,v in params.items():
+            for i, par_i in enumerate(v):
+                all_params[i]= np.fromiter(self.params.values(), dtype= float)
+                ind = list(self.params).index(k)
+                all_params[i][ind] = par_i
+        
+#        gpu_test_func = cuda.jit(device=True)(lambda x: x*x)
+        reactions = np.array(self.get_reacts(), dtype=np.int32)
+        d_reactions = cuda.to_device(reactions)
+        d_out = cuda.to_device(out)
+        d_all_params = cuda.to_device(all_params)
+        print(all_params)
+        raster = np.array(self.raster, np.float32)
+        rng_states = create_xoroshiro128p_states(blocks * threads_per_block*2, seed=1)
+        rates_buff = np.zeros((threads_per_block ,len(self.get_reacts())), dtype=np.float64)
+        d_rates_buff = cuda.to_device(rates_buff)
+        
+        if not hasattr(self, "compute_stochastic_evolution_cuda"):
+            gpu_rates_func = cuda.jit(device=True)(self._rates_function)
+            @cuda.jit
+            def compute_stochastic_evolution_cuda(STATES, reactions, rates_buff, constants_all, time_steps, max_steps, rng_states):
+            #    print(state.dtype)
+            #    state= np.array(state, dtype = np.int64)
+            #    STATE[0,:] = state
+                th_id = cuda.grid(1)
+                STATE=STATES[th_id]
+                constants = constants_all[th_id]
+                tt = 0
+                steps = nb.int64(0)
+                t_ind = steps
+                length = len(time_steps)
+                rates_array = rates_buff[th_id]
+                
+                while steps < max_steps and t_ind < length:
+                        
+                    # sample two random numbers uniformly between 0 and 1
+    #                rr = sp.random.uniform(0,1,2)
+                    r1 = xoroshiro128p_uniform_float64(rng_states, th_id*2)
+                    r2 = xoroshiro128p_uniform_float64(rng_states, th_id*2+0)
+                    gpu_rates_func(STATE[t_ind], constants, rates_array)
+    #        #        print(a_s)
+                    a_0 = 0.
+                    for i in range(len(rates_array)):
+                        a_0 += rates_array[i]
+                    # time step: Meine Version
+                    #print(a_0)
+                    if a_0 == 0:
+                        break
+                    tt = tt - math.log(1. - r1)/a_0
+                    STATE[t_ind][0] = tt
+                    while(tt >= time_steps[t_ind] and t_ind < length):
+                        if(t_ind < length-1):
+                            for k in range(len(STATE[t_ind])):
+                                STATE[t_ind+1][k] = STATE[t_ind][k]
+    #                        STATE[t_ind+1] = STATE[t_ind]
+                        STATE[t_ind,0] = time_steps[t_ind]
+                        t_ind+=1
+                    # find the next reaction
+                    prop = r2 * a_0
+                    a_sum = 0.
+                    ind = 0
+                    for i in range(len(rates_array)):
+                        if prop > a_sum and prop <= rates_array[i]+a_sum:
+                            ind = i
+                            break
+                        a_sum += rates_array[i]
+                        
+                    # update the systems state
+                    for j, r in enumerate(reactions[ind]):
+                        STATE[t_ind][j+1] += r
+                    steps+=1
+            self.compute_stochastic_evolution_cuda = compute_stochastic_evolution_cuda
+        self.compute_stochastic_evolution_cuda[blocks, threads_per_block](d_out,
+                                             d_reactions, d_rates_buff,
+                                             d_all_params, raster, max_steps,
+                                             rng_states )
+        d_rates_buff.to_host()
+        d_out.to_host()
+        return out
+    
     
     def set_result(self, name, res):
         self.results[name] = res
@@ -523,17 +614,18 @@ def compute_stochastic_evolution(reactions, state, runtime, rate_func, constants
     STATE = np.zeros((len(time_steps), len(state)),dtype=np.float64)
 #    print(state.dtype)
 #    state= np.array(state, dtype = np.int64)
-#    STATE[0,:] = state
+    STATE[0,:] = state
     tf = runtime
     tt = 0
     steps = nb.int64(0)
-    i = steps
+    i = steps+1
     length = len(time_steps)
+    rates_array = np.zeros(len(reactions)) 
     while tt <= tf and steps < max_steps and i < length:
         
         # sample two random numbers uniformly between 0 and 1
         rr = sp.random.uniform(0,1,2)
-        a_s = rate_func(state, constants)
+        a_s = rate_func(state, constants, rates_array)
 #        print(a_s)
         a_0 = a_s.sum()
         # time step: Meine Version
@@ -542,9 +634,9 @@ def compute_stochastic_evolution(reactions, state, runtime, rate_func, constants
             break
         tt = tt - np.log(1. - rr[0])/a_0
         state[0] = tt
-        if(tt >= time_steps[i]):
+        while(tt >= time_steps[i] and i < length):
             STATE[i,:] = state
-            STATE[i:0] = time_steps[i]
+            STATE[i,0] = time_steps[i]
             i+=1
         # find the next reaction
         prop = rr[1] * a_0
