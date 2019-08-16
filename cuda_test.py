@@ -25,7 +25,7 @@ k_syn = 100
 name="Test"
 s = bs.SimParam(name,200, 1001,
              params = {"v_syn": k_syn, "s1": s1, "s2": s2, "s3": s3, "d0": d0, "d1": d1, "d2": d2, "d3": d3},
-             init_state = {"pre_RNA": 0, "Incl": 0, "Skip": 0, "ret": 0})
+             init_state = {"pre_RNA": 10, "Incl": 3, "Skip":2, "ret": 1})
 
 s.simulate_ODE = False
 
@@ -39,6 +39,7 @@ s.add_reaction("s3*pre_RNA", {"pre_RNA":-1, "ret":1} )
 s.add_reaction("d3*ret",  {"ret": -1} )
 
 s.simulate()
+out = s._create_out_array()
 #sims_n = 4
 #res10 = s.simulate_cuda(params = {"s1": np.ones(sims_n, np.float32),
 #                                  "s2": np.random.uniform(size=sims_n)+1})

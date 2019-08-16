@@ -239,16 +239,6 @@ class SimParam(object):
     def simulate_cuda(self, params = {"s1": [8,9,10], "s2": [0.4,0.5,0.7]}, max_steps = 1e4, fallback=True):
         #creating param array
         
-        if(not cuda.is_available()):
-            print ("CUDA not available")
-            return None
-        
-        gpus = cuda.gpus
-        dev = cuda.gpus.current
-#        con = cuda.cudadrv.driver.Context(dev, None)
-        con = cuda.current_context()
-        con.reset()
-        mem = con.get_memory_info()
         
         self.compile_system(dynamic=True)
 #        dim1 = len(list(params.values())[0])
@@ -259,6 +249,22 @@ class SimParam(object):
 #            for i, par_i in enumerate(v):
         
         out_dim = dim +  (len(self.raster), len(self.init_state)+1 )
+        
+        
+        
+        if(not cuda.is_available()):
+            print ("CUDA not available")
+            if(fallback):
+                print("Fallback is on. Exection an CPU...")
+                
+            return None
+        
+        gpus = cuda.gpus
+        dev = cuda.gpus.current
+#        con = cuda.cudadrv.driver.Context(dev, None)
+        con = cuda.current_context()
+        con.reset()
+        mem = con.get_memory_info()
         
         mem_estim = np.prod(out_dim) * 8
         mem_ratio = mem_estim/mem.free
@@ -403,6 +409,57 @@ class SimParam(object):
         d_out.to_host()
         return out
     
+    def _create_params_array(self, params = {"s1": [8,9,10], "s2": [0.4,0.5,0.7]}):
+        dim = ()
+        for k,v in params.items():
+            dim += (len(v), )
+        all_params = np.zeros(dim + (len(self.params),), dtype = np.float32)
+#        print(all_params)
+        indx = np.zeros(len(dim), dtype=int)
+        keys, values = list(params.keys()), list(params.values())
+        max_ind = np.array(dim)
+        deep = 0
+        while indx[0] < max_ind[0] and deep >= 0:
+            while indx[deep] < max_ind[deep]:
+                if(deep < len(dim)-1):
+                    deep += 1
+                else:
+#                    print(indx)
+                    all_params[tuple(indx)]= np.fromiter(self.params.values(), dtype= float)
+                    for i, k in enumerate(keys):
+                        ind = list(self.params).index(k)
+#                        print("ind: ", ind)
+#                        print("all_par: ", all_params[indx])
+                        all_params[tuple(indx)][ind] = params[k][indx[i]]
+#                        print("all_par: ", all_params[indx])
+                    indx[deep] += 1
+            indx[deep] = 0
+            deep -= 1
+            indx[deep] += 1
+        return all_params
+    
+    def _create_out_array(self, shape = (5,2)):
+        
+        out = out = np.zeros((shape +  (len(self.raster), len(self.init_state)+1 )), dtype=np.float32)
+        
+        deep = 0
+        stack = []
+        i = 0
+        pointer = out
+        while deep >= 0 and i < len(pointer):
+            while len(pointer.shape) > 2:
+                stack.append((i, pointer))
+                pointer = pointer[i]
+                i = 0
+            pointer[0][1:] = np.array(list(self.init_state.values()))
+            i, pointer = stack.pop()
+            i += 1
+            if(i > len(pointer)):
+                deep -= 1
+                i, pointer = stack.pop()
+                #//TODO OOOOOO
+        
+        return out
     
     def set_result(self, name, res):
         self.results[name] = res
