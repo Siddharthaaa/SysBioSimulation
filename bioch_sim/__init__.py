@@ -235,7 +235,8 @@ class SimParam(object):
         self.results = results
         return results
     
-    def simulate_cuda(self, params = {"s1": [8,9,10], "s2": [0.4,0.5,0.7]}, max_steps = 1e9):
+    
+    def simulate_cuda(self, params = {"s1": [8,9,10], "s2": [0.4,0.5,0.7]}, max_steps = 1e4, fallback=True):
         #creating param array
         
         if(not cuda.is_available()):
@@ -284,6 +285,7 @@ class SimParam(object):
                 else:
 #                    print(indx)
                     all_params[tuple(indx)]= np.fromiter(self.params.values(), dtype= float)
+                    out[tuple[indx]][0][1:] = np.array(list(s.init_state.values()))
                     for i, k in enumerate(keys):
                         ind = list(self.params).index(k)
 #                        print("ind: ", ind)
@@ -314,11 +316,14 @@ class SimParam(object):
         rng_states = create_xoroshiro128p_states(1024, seed=1)
         rates_buff = np.zeros(dim + (len(self.get_reacts()),), dtype=np.float64)
         d_rates_buff = cuda.to_device(rates_buff)
+        progr_indx = np.array(dim, dtype=nb.i8)
+        d_progr_indx = cuda.to_device(progr_indx)
         
         if not hasattr(self, "compute_stochastic_evolution_cuda"):
             gpu_rates_func = cuda.jit(device=True)(self._rates_function)
             @cuda.jit
-            def compute_stochastic_evolution_cuda(STATES, reactions, rates_buff, constants_all, time_steps, max_steps, rng_states):
+            def compute_stochastic_evolution_cuda(STATES, reactions, rates_buff, constants_all,
+                                                  time_steps, max_steps, rng_states, progr_i):
             #    print(state.dtype)
             #    state= np.array(state, dtype = np.int64)
             #    STATE[0,:] = state
@@ -326,19 +331,21 @@ class SimParam(object):
                 th_nr = cuda.grid(2)
                 #TODO 
                 th_n = th_nr[0] * th_nr[1]
+                x, y = th_nr[0], th_nr[1]
                 
                
-                STATES = STATES[th_nr[0], th_nr[1]]
-                constants_all = constants_all[th_nr[0], th_nr[1]]
-                rates_buff = rates_buff[th_nr[0], th_nr[1]]
+                STATES = STATES[x,y]
+                constants_all = constants_all[x,y]
+                rates_buff = rates_buff[x,y]
+                
 #                if(cuda.blockDim.z > 0):
 #                    STATES = STATES[th_nr[1]]
 #                    constants_all = constants_all[th_nr[0], th_nr[1]]
 #                    rates_buff = rates_buff[th_nr[0], th_nr[1]]
                
                 tt = 0
-                steps = nb.int64(0)
-                t_ind = steps
+                steps = nb.int32(0)
+                t_ind = progr_i[x,y]
                 length = len(time_steps)
                
 #                rates_buff = cuda.local.array(len(reactions, nb.float64))
@@ -347,8 +354,8 @@ class SimParam(object):
                         
                     # sample two random numbers uniformly between 0 and 1
     #                rr = sp.random.uniform(0,1,2)
-                    r1 = xoroshiro128p_uniform_float64(rng_states, th_n*2)
-                    r2 = xoroshiro128p_uniform_float64(rng_states, th_n*2+1)
+                    r1 = xoroshiro128p_uniform_float32(rng_states, th_n*2)
+                    r2 = xoroshiro128p_uniform_float32(rng_states, th_n*2+1)
                     gpu_rates_func(STATES[t_ind], constants_all, rates_buff)
     #        #        print(a_s)
                     a_0 = 0.
@@ -364,8 +371,10 @@ class SimParam(object):
                         if(t_ind < length-1):
                             for k in range(len(STATES[t_ind])):
                                 STATES[t_ind+1][k] = STATES[t_ind][k]
+                                
     #                        STATE[t_ind+1] = STATE[t_ind]
                         STATES[t_ind,0] = time_steps[t_ind]
+                        progr_i[x,y] = t_ind
                         t_ind+=1
                     # find the next reaction
                     prop = r2 * a_0
@@ -382,10 +391,14 @@ class SimParam(object):
                         STATES[t_ind][j+1] += r
                     steps+=1
             self.compute_stochastic_evolution_cuda = compute_stochastic_evolution_cuda
-        self.compute_stochastic_evolution_cuda[blocks, dim](d_out,
+            
+        while(np.any(progr_indx < length-1)):
+            self.compute_stochastic_evolution_cuda[blocks, dim](d_out,
                                              d_reactions, d_rates_buff,
                                              d_all_params, raster, max_steps,
-                                             rng_states )
+                                             rng_states, d_progr_indx )
+            progr_indx = d_progr_indx.copy_to_host()
+            
         d_rates_buff.to_host()
         d_out.to_host()
         return out

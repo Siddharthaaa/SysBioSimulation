@@ -18,6 +18,9 @@ from sklearn.linear_model import LinearRegression
 from bioch_sim import *
 import bioch_sim as bs
 import aux_th
+import scipy as sp 
+
+from sklearn.decomposition import PCA
 
 BRIE_dir = os.path.join("/home","timur","ext","working_dir","PRJEB15062", "BRIE_output")
 
@@ -47,14 +50,17 @@ def _main():
         summary_df[(c_name, "PSI")] = cell_df["Psi"]
         
     summary_df.set_index(cell_df["gene_id"].values, inplace=True)
-    df = perform_QC(summary_df, min_counts = 2e5, min_se = 3000, max_share=0.8,
-                    top_se_count=130, min_reads=10, min_cells=15)
-#    general_analysis(df)
+    df = perform_QC(summary_df, min_counts = 2e5, min_se = 3000, max_share=0.9,
+                    top_se_count=100, min_reads=5, min_cells=15)
+    df_f_s = perform_QC(summary_df, min_counts = 2e5, min_se = 4000, max_share=0.8,
+                    top_se_count=100, min_reads=5, min_cells=20)
+    
+#    general_analysis(df, th_suppoints = 20)
 #    show_splicing_data(df)
 #    _tmp_plot_psi_to_intens(df)
     
     
-    return df
+    return df_f_s
 
 def perform_QC(df= None, min_counts = 1e5, min_se = 3000, max_share = 0.9,
                top_se_count = 100, min_reads = 5, min_cells = 10 ):
@@ -67,7 +73,7 @@ def perform_QC(df= None, min_counts = 1e5, min_se = 3000, max_share = 0.9,
     # (ii) at least 5000 genes with non-zero expr
     min_se = min_se
     
-    # (iii) less than 90% of counts are assigned to the top 100 expressed genes per cell
+    # (iii) less than 90% of counts are assigned to the top 100 expressed exons per cell
     max_share = max_share
     top_se_count = top_se_count
     min_reads = min_reads
@@ -185,12 +191,37 @@ def general_analysis(df = None, ax = None, th_suppoints = 10):
         #            print(x.reshape((-1, 1)))
                 model.fit(x.reshape((-1, 1)), y)
                 slopes.append(model.coef_[0])
-                
+    df["slope_psi_to_intens"] = np.array(slopes)                
     ax.hist(slopes, bins=100)
     ax.set_title("Slope of LinReg btw. PSI and log(1+counts)")
     ax.set_ylabel("#")
     ax.set_xlabel("slope")
     return (intensity, df_corr, slopes)
+
+def _tmp_show_best_slopes(df=None):
+    if df is None:
+        return None
+    
+    first_n = 4
+    
+    df_sorted = df.sort_values("slope_psi_to_intens", ascending = True)
+    fit = plt.figure()
+    for  i in range(first_n):
+        ax= plt.subplot(first_n, 3, i*3+ 1)
+        row = df_sorted.iloc[i]
+        psis = row[(slice(None), "PSI")].values
+        counts = row[(slice(None), "counts")].values
+        ax.plot(psis, counts, ".")
+        ax.set_ylabel("counts")
+        ax.set_xlabel("pis")
+        ax.set_title("psi to count")
+        ax= plt.subplot(first_n, 3, i*3+ 2)
+        bs.plot_hist(psis,ax = ax)
+        ax.set_xlabel("PSI")
+        ax= plt.subplot(first_n, 3, i*3+ 3)
+        
+        
+        
 
 def _tmp_plot_psi_to_intens(df = None, log = True, th_suppoints = 10 ):
     fig = plt.figure()
@@ -233,7 +264,18 @@ def _tmp_plot_psi_to_intens(df = None, log = True, th_suppoints = 10 ):
     ax.legend()
     
     return  ax
-
+def show_PCA(df):
+    pca = PCA(n_components=2)
+    psis = df.loc[:,(slice(None), "counts")].values.T
+    principalComponents = pca.fit_transform(psis)
+    principalDf = pd.DataFrame(data = principalComponents
+             , columns = ['pc1', 'pc2'])
+    fig = plt.figure(figsize = (8,8))
+    ax = fig.add_subplot(1,1,1)
+    ax.scatter(principalDf["pc1"], principalDf["pc2"])
+    return principalDf, pca
+    pca.components_
+    
 def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
     
     if ax == None:
@@ -333,7 +375,8 @@ def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
     
     #best correlated exons
     #with corrected R
-    c_inds = np.argsort(-np.abs(np.array(corr_values)) * np.log(val_c))
+#    c_inds = np.argsort(-np.abs(np.array(corr_values)) * np.log(val_c))
+    c_inds = np.argsort(-np.abs(np.array(corr_values)))
     
 #    print(c_inds)
 #    print(np.abs(np.array(corr_values)[c_inds]))
@@ -378,6 +421,24 @@ def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
     indx_pairs = np.argsort(df_corr)
     return (sorted_df, indx_pairs, df_corr)
 
+def show_counts_to_variance(df = None):
+    psi_stds = df["std"]
+    psi_means = df["mean"]
+    counts = np.nanmean(df.loc[:,(slice(None), "counts")], axis=1)
+    fig = plt.figure(figsize = (10,6))
+    ax = fig.add_subplot(1,2,1)
+    ax.scatter(counts, psi_stds)
+    ax.set_ylabel("std(PSI)")
+    ax.set_xlabel("mean(counts)")
+    
+    ax = fig.add_subplot(1,2,2)
+    ax.scatter(psi_means, psi_stds)
+    psi_std_theory = sp.stats.binom.std(counts, psi_means)/counts
+    ax.scatter(psi_stds, psi_std_theory)
+        
+    
+
 if __name__ == "__main__":
     if True:
         df = _main()
+        

@@ -6,7 +6,7 @@ Created on Sun Aug 11 17:41:21 2019
 """
 
 from pylab import imshow, show
-import pycuda as pc
+
 from numba import cuda
 import bioch_sim as bs
 from timeit import default_timer as timer
