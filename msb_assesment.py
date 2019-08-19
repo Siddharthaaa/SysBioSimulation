@@ -13,7 +13,7 @@ import pandas as pd
 import numpy as np
 from summarize_BRIE_output import *
 
-excl_path = "E:\\Eigen Dateien\\Arbeit_IMB\\SysBioSimulation\\dates\\msbfig2.xlsx"
+excl_path = "dates/msbfig2.xlsx"
 
 if __name__ == "__main__":
     counts_df = pd.read_excel(excl_path, 1)   
@@ -38,7 +38,12 @@ if __name__ == "__main__":
             c_df = filtered_df.filter(regex="^\d+$")
             
             for col in c_df:
-                res_df[(col, v_name)] = c_df[col].values
+                res_df[(col, v_name)] = c_df[col].values if v_name != "counts" else np.exp(c_df[col].values)
+#                res_df[(col, v_name)] = c_df[col].values 
                 res_df.set_index(genes, inplace=True)              
         res_dfs.append(res_df)
-    d = res_dfs[0]
+    
+    d = res_dfs[1]
+    extend_data(d)
+    tmp_plot_psi_to_intens(d)
+    s = show_counts_to_variance(d)

@@ -51,9 +51,10 @@ color_steady_state = 'saddlebrown'
 
 
 class SimParam(object):
-    def __init__(self, name, time=200, discr_points= 200, params={}, init_state={}):
+    def __init__(self, name, time=200, discr_points= 1001, params={}, init_state={}):
         self.name = str(name)
         self.runtime = time
+        self.raster_len = discr_points
         self.set_raster_count(discr_points)
         self.params=params
         
@@ -87,6 +88,7 @@ class SimParam(object):
         return s
     def set_runtime(self, time):
         self.runtime=time
+        self.set_raster_count(self.raster_len)
         
     def set_state(self, state):
         self._state = state
@@ -193,13 +195,13 @@ class SimParam(object):
         self._dynamic_compile = dynamic
 #        self._rates_function = types.MethodType( self._rates_function, self )
         return func_str
-    def simulate(self, ODE = False, ret_raw=False, max_steps = 1e7):
+    def simulate(self, ODE = False, ret_raw=False, max_steps = 1e9):
         if not self._is_compiled:
             self.compile_system(dynamic=True)
         self._state = list(self.init_state.values())
         self._state.insert(0,0)
         self._state = np.array(self._state, dtype=np.float64)
-#        print("simulate " + self.param_str())
+        print("simulate " + self.param_str())
         results={}
         params = self.get_all_params()
         initial_state = params["init_state"]
@@ -877,7 +879,7 @@ def rasterize(x, steps):
             
     return res
         
-def simulate(sim, ODE = True, ret_raw=False, max_steps = 1e7):
+def simulate(sim, ODE = True, ret_raw=False, max_steps = 1e9):
     return sim.simulate(ODE = ODE, ret_raw=ret_raw, max_steps = max_steps)
    
 #unfinished(useless) function
@@ -1050,3 +1052,71 @@ def hill(x, Ka, n):
     if x > 0:
         return 1/(1 + (Ka/x)**n)
     return 0
+
+def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
+    s = None
+    if(name == "basic"):
+        s1= s2 = s3 = d1 = d2 = d3 = d0 = 1
+        d1 = 0.1
+        d2 = 0.1
+        k_syn = 100
+        
+        name="Basic"
+        s = SimParam(name,100, 1001,
+                     params = {"v_syn": k_syn, "s1": s1, "s2": s2, "s3": s3, "d0": d0, "d1": d1, "d2": d2, "d3": d3},
+                     init_state = {"pre_RNA": 10, "Incl": 3, "Skip":2, "ret": 1})
+        
+        s.simulate_ODE = True
+        
+        s.add_reaction("v_syn", {"pre_RNA":1} )
+        s.add_reaction("d0*pre_RNA", {"pre_RNA":-1} )
+        s.add_reaction("s1*pre_RNA", {"pre_RNA":-1, "Incl":1})
+        s.add_reaction("d1*Incl", {"Incl": -1}  )
+        s.add_reaction("s2*pre_RNA" ,  {"pre_RNA":-1, "Skip":1})
+        s.add_reaction("d2*Skip", {"Skip":-1}  )
+        s.add_reaction("s3*pre_RNA", {"pre_RNA":-1, "ret":1} )
+        s.add_reaction("d3*ret",  {"ret": -1} )
+    elif(name == "hill_fb"):
+                
+        k_on=0
+        k_off=0.00
+        v_syn=10.000
+        s1=0.500
+        Ka1=70
+        n1=6.000
+        s2=1.000
+        s3=0.100
+        d0=0.100
+        d1=0.100
+        d2=0.100
+        d3=0.500
+        s1_t=5
+        name="Splicing with a feedback (over hill func)"
+        s = bs.SimParam(name, 200, 1001,
+                     params = {"k_on": k_on, "k_off": k_off, "v_syn": v_syn, "s1": s1, "Ka1":Ka1, "n1":n1,
+                               "s2": s2, "s3": s3, "d0": d0, "d1": d1, "d2": d2, "d3": d3, "s1_t":s1_t},
+                     init_state = {"Pr_on": 1, "Pr_off": 0, "pre_RNA": 0,
+                                   "Incl": 10, "Skip": 0, "ret": 0})
+        
+        s.simulate_ODE = True
+        
+        s.add_reaction("k_on*Pr_off", {"Pr_on":1, "Pr_off":-1})
+        s.add_reaction("k_off*Pr_on", {"Pr_off":1, "Pr_on":-1})
+        s.add_reaction("v_syn*Pr_on", {"pre_RNA":1} )
+        s.add_reaction("d0*pre_RNA", {"pre_RNA":-1} )
+        s.add_reaction("s1*pre_RNA + pre_RNA* s1_t * (1/(1 + (Ka1/Incl)**n1) if Incl > 0 else 0)", {"pre_RNA":-1, "Incl":1})
+        s.add_reaction("d1*Incl", {"Incl": -1}  )
+        s.add_reaction("s2*pre_RNA" ,  {"pre_RNA":-1, "Skip":1})
+        #            s.add_reaction("s2*pre_RNA + 5* (Skip > 0)* 1/(1+(Ka2/Skip)**n2)" ,  {"pre_RNA":-1, "Skip":1})
+        s.add_reaction("d2*Skip", {"Skip":-1}  )
+        s.add_reaction("s3*pre_RNA", {"pre_RNA":-1, "ret":1} )
+        s.add_reaction("d3*ret",  {"ret": -1} )
+    elif(name == "LotkaVolterra"):
+        s = SimParam("Lotka Voltera", 50, 301,
+                      {"k1":1, "k2":0.007, "k3":0.6 },
+                      {"Prey":50, "Predator":200})
+        s.add_reaction("k1*Prey",{"Prey":1})
+        s.add_reaction("k2*Prey*Predator",{"Prey":-1, "Predator":1})
+        s.add_reaction("k3*(Predator)",{"Predator":-1})
+    return s
+        
