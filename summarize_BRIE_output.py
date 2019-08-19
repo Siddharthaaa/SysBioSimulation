@@ -6,7 +6,7 @@ Created on Wed Aug  7 12:21:14 2019
 @author: timur
 """
 
-import pyopencl as ocl
+#import pyopencl as ocl
 
 import numba as nb
 import pandas as pd
@@ -23,6 +23,7 @@ import scipy as sp
 from sklearn.decomposition import PCA
 
 BRIE_dir = os.path.join("/home","timur","ext","working_dir","PRJEB15062", "BRIE_output")
+BRIE_dir = os.path.join("E:\\Eigen Dateien\\Arbeit_IMB\\SysBioSimulation\\dates\\BRIE_output", "BRIE_output")
 
 def _main():
 
@@ -126,7 +127,7 @@ def perform_QC(df= None, min_counts = 1e5, min_se = 3000, max_share = 0.9,
         psis = df.loc[:, (c_id, "PSI")].values
         psis = np.where(reads < min_reads, np.nan, psis )
         df[(c_id, "PSI")] = psis
-        
+    print(df)
     row_idx = np.sum(np.isnan(df.loc[:, (slice(None), "PSI" )].values) == False , 1) < min_cells
     g_id_to_drop = gene_ids[row_idx]
     df.drop(g_id_to_drop, inplace = True)

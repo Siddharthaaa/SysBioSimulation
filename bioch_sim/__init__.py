@@ -105,7 +105,7 @@ class SimParam(object):
         """
         if state is None:
             state=self._state
-        return self._rates_function(state)
+        return self._rates_function(state, self._constants, np.zeros(len(self._reactions)))
     def get_reacts(self):
         #returns reaction matrix
         return self._reacts
@@ -236,7 +236,9 @@ class SimParam(object):
         return results
     
     
-    def simulate_cuda(self, params = {"s1": [8,9,10], "s2": [0.4,0.5,0.7]}, max_steps = 1e4, fallback=True):
+    def simulate_cuda(self, params = {"s1": [1,2,3,4,5,6,7,8,9],
+                                      "s2": [0.4,0.5,0.7,1,2,3]},
+                        max_steps = 1000, fallback=True):
         #creating param array
         
         
@@ -250,7 +252,7 @@ class SimParam(object):
         
         out_dim = dim +  (len(self.raster), len(self.init_state)+1 )
         
-        
+        self.cuda_params_dict = params
         
         if(not cuda.is_available()):
             print ("CUDA not available")
@@ -265,11 +267,15 @@ class SimParam(object):
         con = cuda.current_context()
         con.reset()
         mem = con.get_memory_info()
-        
-        mem_estim = np.prod(out_dim) * 8
+
+        mem_estim = np.prod(np.array(out_dim, dtype = np.int64)) * 8
         mem_ratio = mem_estim/mem.free
-        print("Mem ration: ", mem_ratio)
-        if( mem_ratio> 0.8):
+        print("Mem ratio: ", mem_ratio)
+        print("Mem free: ", mem.free)
+        print("Mem estimate: ", mem_estim)
+#        print(dim)
+#        print(out_dim)
+        if( mem_ratio> 0.8 or mem.free < 1e8):
             print("Memory need: ", mem_estim, "\nMemory available: ", mem.free)
             print("Ratio ", mem_ratio, " exceeds ", 0.8 )
             print("Abort calculation")
@@ -277,9 +283,9 @@ class SimParam(object):
         
         threads_per_block = np.prod(dim)
         blocks = 1
-        all_params = np.zeros(dim + (len(self.params),), dtype = np.float32)
+        all_params = np.zeros(dim + (len(self.params),), dtype = np.float64)
 #        print(all_params)
-        out = np.zeros((dim +  (len(self.raster), len(self.init_state)+1 )), dtype=np.float32)
+        out = np.zeros((dim +  (len(self.raster), len(self.init_state)+1 )), dtype=np.float64)
         indx = np.zeros(len(dim), dtype=int)
         keys, values = list(params.keys()), list(params.values())
         max_ind = np.array(dim)
@@ -291,7 +297,7 @@ class SimParam(object):
                 else:
 #                    print(indx)
                     all_params[tuple(indx)]= np.fromiter(self.params.values(), dtype= float)
-                    out[tuple[indx]][0][1:] = np.array(list(s.init_state.values()))
+                    out[tuple(indx)][0][1:] = np.array(list(self.init_state.values()))
                     for i, k in enumerate(keys):
                         ind = list(self.params).index(k)
 #                        print("ind: ", ind)
@@ -319,56 +325,68 @@ class SimParam(object):
 #        print(all_params)
         raster = np.array(self.raster, np.float32)
 #        rng_states = create_xoroshiro128p_states(blocks * threads_per_block * 2, seed=1)
-        rng_states = create_xoroshiro128p_states(1024, seed=1)
-        rates_buff = np.zeros(dim + (len(self.get_reacts()),), dtype=np.float64)
+        rng_states = create_xoroshiro128p_states(2048, seed=1)
+        rates_buff = np.zeros(dim + (len(self.get_reacts()),))
         d_rates_buff = cuda.to_device(rates_buff)
-        progr_indx = np.array(dim, dtype=nb.i8)
-        d_progr_indx = cuda.to_device(progr_indx)
-        
-        if not hasattr(self, "compute_stochastic_evolution_cuda"):
+        progress_indx = np.zeros(dim, dtype=np.int32)
+        d_progr_indx = cuda.to_device(progress_indx)
+        log_arr = np.zeros(dim)
+        d_log_arr = cuda.to_device(log_arr) 
+        if True:
+#        if not hasattr(self, "compute_stochastic_evolution_cuda"):
             gpu_rates_func = cuda.jit(device=True)(self._rates_function)
+            self._gpu_rates_f = gpu_rates_func
             @cuda.jit
-            def compute_stochastic_evolution_cuda(STATES, reactions, rates_buff, constants_all,
-                                                  time_steps, max_steps, rng_states, progr_i):
-            #    print(state.dtype)
-            #    state= np.array(state, dtype = np.int64)
-            #    STATE[0,:] = state
-                
+            def compute_stochastic_evolution_cuda(STATES, reacs, rates_b, constants_all,
+                                                  time_steps, max_steps, rng_st, progr_i, log):
+
                 th_nr = cuda.grid(2)
                 #TODO 
-                th_n = th_nr[0] * th_nr[1]
                 x, y = th_nr[0], th_nr[1]
+                thid = cuda.blockDim.x * y + x
                 
-               
                 STATES = STATES[x,y]
                 constants_all = constants_all[x,y]
-                rates_buff = rates_buff[x,y]
-                
-#                if(cuda.blockDim.z > 0):
-#                    STATES = STATES[th_nr[1]]
-#                    constants_all = constants_all[th_nr[0], th_nr[1]]
-#                    rates_buff = rates_buff[th_nr[0], th_nr[1]]
+                rates_b = rates_b[x,y]
                
-                tt = 0
                 steps = nb.int32(0)
                 t_ind = progr_i[x,y]
+#                t_log[x,y] = t_ind
                 length = len(time_steps)
-               
-#                rates_buff = cuda.local.array(len(reactions, nb.float64))
+                tt=time_steps[t_ind]
+                
+                
                 
                 while steps < max_steps and t_ind < length:
+#                    tmp = 0
+#                    for ST in STATES[t_ind]:
+#                        if(ST<0 and log[x,y] == 0):
+#                            log[x,y] =  1
+#                    tmp +=1
+#                    tmp = 0
+#                    for const in constants_all:
+#                        if(const<0 and log[x,y] == 0):
+#                            log[x,y] =  2
+#                    tmp +=1
                         
-                    # sample two random numbers uniformly between 0 and 1
-    #                rr = sp.random.uniform(0,1,2)
-                    r1 = xoroshiro128p_uniform_float32(rng_states, th_n*2)
-                    r2 = xoroshiro128p_uniform_float32(rng_states, th_n*2+1)
-                    gpu_rates_func(STATES[t_ind], constants_all, rates_buff)
-    #        #        print(a_s)
+                    r1 = xoroshiro128p_uniform_float64(rng_st, thid*2)
+                    r2 = xoroshiro128p_uniform_float64(rng_st, thid*2+1)
+                    gpu_rates_func(STATES[t_ind], constants_all, rates_b)
+#                    tmp = 0
+#                    for r in rates_b:
+#                        if(r<0 and log[x,y] == 0):
+#                            log[x,y] =  3
+#                        tmp +=1
+
                     a_0 = 0.
-                    for i in range(len(rates_buff)):
-                        a_0 += rates_buff[i]
-                    # time step: Meine Version
-                    #print(a_0)
+                    for i in range(len(rates_b)):
+                        a_0 += rates_b[i]
+#                        if(rates_b[i]<0 and log[x,y] == 0):
+#                            log[x,y] = i
+#                    if a_0 <0:
+#                        None
+#                        log[x,y] = 3
+                    
                     if a_0 == 0:
                         break
                     tt = tt - math.log(1. - r1)/a_0
@@ -380,33 +398,52 @@ class SimParam(object):
                                 
     #                        STATE[t_ind+1] = STATE[t_ind]
                         STATES[t_ind,0] = time_steps[t_ind]
-                        progr_i[x,y] = t_ind
+                        
                         t_ind+=1
                     # find the next reaction
                     prop = r2 * a_0
                     a_sum = 0.
                     ind = 0
-                    for i in range(len(rates_buff)):
-                        if prop > a_sum and prop <= rates_buff[i]+a_sum:
+                    # DOTO: BUG ASSUMED
+                    for i in range(len(rates_b)):
+                        a_sum += rates_b[i]
+#                        if prop >= a_sum and prop < rates_b[i]+a_sum:
+                        if a_sum >= prop:
                             ind = i
                             break
-                        a_sum += rates_buff[i]
+                    
+#                    if ((ind == 1 or ind==0) and log[x,y] == 0):
+#                        log[x,y] = t_ind
                         
                     # update the systems state
-                    for j, r in enumerate(reactions[ind]):
+                    for j, r in enumerate(reacs[ind]):
                         STATES[t_ind][j+1] += r
                     steps+=1
+                    progr_i[x,y] = t_ind
             self.compute_stochastic_evolution_cuda = compute_stochastic_evolution_cuda
             
-        while(np.any(progr_indx < length-1)):
+        i = 0
+        self.cuda_out = out
+#        d_progr_indx = cuda.to_device(progress_indx)
+        while(np.any(progress_indx < len(self.raster)-1)):
+#            print("loop ", i )
+            if (i % 100 == 0): print("loop: ", i , "\n", progress_indx)
+#            d_progr_indx = cuda.to_device(progress_indx)
             self.compute_stochastic_evolution_cuda[blocks, dim](d_out,
                                              d_reactions, d_rates_buff,
                                              d_all_params, raster, max_steps,
-                                             rng_states, d_progr_indx )
-            progr_indx = d_progr_indx.copy_to_host()
+                                             rng_states, d_progr_indx, d_log_arr )
+#            print(test)
+#            print("end loop ", i)
+            i+=1
+#            d_out.copy_to_host(self.cuda_out)
+            d_progr_indx.copy_to_host(progress_indx)
+#            d_log_arr.copy_to_host(log_arr)
+#            self.cuda_log = log_arr
             
         d_rates_buff.to_host()
         d_out.to_host()
+        self.cuda_out = out
         return out
     
     def _create_params_array(self, params = {"s1": [8,9,10], "s2": [0.4,0.5,0.7]}):
@@ -616,12 +653,30 @@ class SimParam(object):
         
         #ax.yaxis.set_label_coords(-0.28,0.25)
         ax.set_ylabel(self.param_str("\n"), rotation=0, fontsize="large" )
-        ax.set_ylabel("#")
+#        ax.set_ylabel("#")
         ax.set_xlabel("time",fontsize="large" )
         ax.set_title(self.name)
         ax.legend()
         return ax
-
+    
+    def plot_cuda(self):
+#        fig = plt.figure()
+        x,y = tuple(self.cuda_last_params.shape[:2])
+        fig, ax = plt.subplots(x, y, sharex =True, sharey = True)
+        cuda_res = self.cuda_out
+        res_tmp = self.results["stoch_rastr"]
+        for xx in range(x):
+            for yy in range(y):
+                self.results["stoch_rastr"]=cuda_res[xx,yy]
+                self.plot_course(ax = ax[xx,yy])
+                ax[xx,yy].set_ylabel("")
+                ax[xx,yy].set_xlabel("")
+                ax[xx,yy].set_title("")
+                ax[xx,yy].get_legend().remove()
+                
+                
+        self.results["stoch_rastr"] = res_tmp
+        
 def plot_hist(x,title = "Distribution", bins = 15, ax = None, scale=1, exp_maxi=3, max_range=None ):
     if ax == None:
         fig, ax = plt.subplots(1, figsize=(5*scale,5*scale))
@@ -740,6 +795,7 @@ def get_ODE_delta(x,t,sim):
     reacts = sim.get_reacts()
     rates = sim.get_rates(x_arr)
 #    print(rates)
+#    print(reacts, rates)
     dx = reacts.transpose().dot(rates)
     return dx
   
@@ -785,6 +841,7 @@ def compute_stochastic_evolution(reactions, state, runtime, rate_func, constants
         
     
 #    return STATE[0:steps+1]
+#        print(steps)
     return STATE
 # define parameters  
 
