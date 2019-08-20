@@ -40,10 +40,12 @@ if __name__ == "__main__":
             for col in c_df:
                 res_df[(col, v_name)] = c_df[col].values if v_name != "counts" else np.exp(c_df[col].values)
 #                res_df[(col, v_name)] = c_df[col].values 
-                res_df.set_index(genes, inplace=True)              
+                res_df.set_index(genes, inplace=True)
+#        perform_QC(res_df, min_counts=100,min_se= 10, max_share=1, top_se_count=1, min_reads=5, min_cells=10 )
         res_dfs.append(res_df)
     
-    d = res_dfs[1]
+    d = res_dfs[0]
+    d = perform_QC(d, min_counts=100,min_se= 10, max_share=1, top_se_count=1, min_reads=5, min_cells=10 )
     extend_data(d)
     tmp_plot_psi_to_intens(d)
-    s = show_counts_to_variance(d)
+    s = show_counts_to_variance(d, log=True)

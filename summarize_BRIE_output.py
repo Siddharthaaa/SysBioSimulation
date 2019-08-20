@@ -19,7 +19,8 @@ from bioch_sim import *
 import bioch_sim as bs
 import aux_th
 import scipy as sp 
-
+import random as rd
+import matplotlib.cm as cm
 from sklearn.decomposition import PCA
 
 BRIE_dir = os.path.join("/home","timur","ext","working_dir","PRJEB15062", "BRIE_output")
@@ -245,8 +246,8 @@ def tmp_plot_psi_to_intens(df = None, log = True, th_suppoints = 10 ):
     x = stds
     y = intensity
     
-    print(np.logical_not(np.isnan(x)).sum())
-    print(np.logical_not(np.isnan(y)).sum())   
+#    print(np.logical_not(np.isnan(x)).sum())
+#    print(np.logical_not(np.isnan(y)).sum())   
     
     inds = np.where(np.logical_not(np.isnan(x)) * np.logical_not(np.isnan(y)))
     
@@ -426,41 +427,57 @@ def extend_data(df):
     if not df.columns.contains("std"):
         df["std"] = [np.nanstd(a) for a in df.loc[:,(slice(None),"PSI")].values ]
 
-def show_counts_to_variance(df = None):
-    psi_stds = df["std"]
-    psi_means = df["mean"]
+def show_counts_to_variance(df = None, gillespie = False, log = False):
+    psi_stds = df["std"].values
+    psi_means = df["mean"].values
     counts = np.nanmean(df.loc[:,(slice(None), "counts")], axis=1)
-    counts = np.log(counts)
+    if log:
+        counts = np.log(counts)
     fig = plt.figure(figsize = (12,6))
     ax = fig.add_subplot(1,3,1)
-    ax.scatter(counts, psi_stds)
+    
+    psis_tmp = [0.05, 0.1, 0.2, 0.5, 0.8, 0.9, 0.95]
+    cols = cm.rainbow(np.array(psis_tmp))
+    ax.scatter(counts, psi_stds, label = "")
     ax.set_ylabel("std(PSI)")
-    ax.set_xlabel("ln(mean(counts))")
+    ax.set_xlabel("mean(counts)")
+    points = 100
+    counts_theo = np.linspace(counts.min(), counts.max(), points)
+    for psi, col  in zip (psis_tmp, cols):
+        indx = np.where(psi_stds > psi)
+        print(col)
+        ax.scatter(counts[indx], psi_stds[indx],c=col, label = "")
+        psis_th = np.ones(points)*psi
+        ax.plot(counts_theo, sp.stats.binom.std(counts_theo, psis_th )/counts_theo,
+                label = "psi: %2.2f" % psi, lw=1)
+#        ax = fig.add_subplot(1,3,2)
+    ax.legend()    
     
     ax = fig.add_subplot(1,3,2)
-    ax.scatter(psi_means, psi_stds)
+    ax.scatter(psi_means, psi_stds, label = "")
     ax.set_ylabel("std(psi)")
     ax.set_xlabel("mean(psi)")
-    
+    for count in np.linspace(counts.min(), counts.max()*1.2, 4):
+        psis_tmp = np.linspace(0,1, 50)
+        stds_tmp = sp.stats.binom.std(count, psis_tmp )/count
+        ax.plot(psis_tmp, stds_tmp, label = "counts= %d" % count, lw=0.7)
+    ax.legend()
     ax = fig.add_subplot(1,3,3)
     psi_std_theory = sp.stats.binom.std(counts, psi_means)/counts
     ax.scatter(psi_stds, psi_std_theory, label="binomial sim")
-    ax.set_ylabel("PSI simulated")
-    ax.set_xlabel("PSI measured")
+    ax.set_ylabel("std(PSI) simulated")
+    ax.set_xlabel("std(PSI) measured")
     
-    psi_std_theory = tmp_simulate_std_gillespie(counts, psi_means)
-    ax.scatter(psi_stds, psi_std_theory, label="gillespie sim")
+    if(gillespie):
+        psi_std_theory = tmp_simulate_std_gillespie(counts, psi_means)
+        ax.scatter(psi_stds, psi_std_theory, label="gillespie sim")
+    ax.plot([0,0.5],[0, 0.5], c = "r")
     ax.legend()
     
-    fig = plt.figure(figsize = (12,6))
-    ax = fig.add_subplot(1,3,1)
-    points = 100
-    counts_theo = np.linspace(counts.min(), counts.max()*3, points)
-    for psi in np.linspace(0,1,8):
-        psis_th = np.ones(points)*psi
-        ax.plot(counts_theo, tmp_simulate_std_binomial(counts_theo, psis_th ), label = "psi:" + str(psi), lw=0.3)
-#        ax = fig.add_subplot(1,3,2)
-        ax.scatter(counts, psi_stds, label="measured")
+#    fig = plt.figure(figsize = (12,6))
+#    ax = fig.add_subplot(1,3,1)
+#   
+#    ax.scatter(counts, psi_stds, label="measured")
     
     return fig
 
@@ -475,7 +492,7 @@ def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000):
     s =bs.get_exmpl_sim("basic")
     s.simulate_ODE = False
     s.set_raster_count(10001)
-    s.set_runtime(1000)
+    s.set_runtime(runtime)
     res = np.zeros(len(counts))
     for i in range(len(counts)):
         c = counts[i]
@@ -501,7 +518,7 @@ def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000):
         sims_tmp.append(s.params)
         (indx, psis) = s.compute_psi(ignore_extremes=False, recognize_threshold=0)
         res[i] = np.nanstd(psis, ddof=0)
-        psis_tmp.append(np.mean(psis))
+        psis_tmp.append(np.nanmean(psis))
         print(psis_tmp[-1])
         counts_tmp.append(np.mean(s.get_res_col("Incl")[100:] + s.get_res_col("Skip")[100:]))
         
@@ -510,35 +527,35 @@ def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000):
 
 def tmp_simulate_std_binomial(counts, psi_means):
     
-    sim_n = 400
+    sim_n = 1000
     res_all = np.zeros(len(counts))
     for i in range(len(counts)):
         tries = np.zeros(sim_n)
         for j in range(sim_n):
             res_j = np.random.uniform(size=int(counts[i]))
             res_j = np.where(res_j < psi_means[i], 1, 0)
-            tries[j] = np.sum(res_j)/counts[i]
-        res_all[i] = np.std(tries, ddof=0)
+            tries[j] = np.sum(res_j)/int(counts[i])
+        res_all[i] = np.std(tries, ddof=1)
     return res_all
         
 
 def tmp_compare_binomial_gillespie(counts, psi_means):
     fig = plt.figure()
     binom = sp.stats.binom.std(counts, psi_means)/counts
-    gillespie = tmp_simulate_std_gillespie(counts, psi_means)
+    gillespie = tmp_simulate_std_gillespie(counts, psi_means, runtime=1e4)
 #    gillespie = tmp_simulate_std_binomial(counts, psi_means)
     ax = fig.add_subplot(111)
     cm = plt.cm.get_cmap('RdYlBu')
-    ax.scatter(binom, gillespie, s = psi_means*300, c = psi_means, cmap = cm, alpha=0.3)
+    ax.scatter(binom, gillespie, s = psi_means*300, c = counts, cmap = cm, alpha=0.35)
     ax.set_xlabel("Binomial, std")
     ax.set_ylabel("Gillespie, std")
     
     ax.plot([0,np.max(binom)],[0,np.max(binom)], c="r")
     return 0
-
-#anz = 1000
+#
+#anz = 2000
 #psi_means = np.random.beta(2,2,size= anz)
-#counts = np.random.uniform(1,10, anz)
+#counts = np.random.randint(1,40, anz)
 #tmp_compare_binomial_gillespie(counts,psi_means)
 ##s=sims_tmp[0]
 ##s_res = s.compute_psi()
@@ -551,4 +568,8 @@ def tmp_compare_binomial_gillespie(counts, psi_means):
 if __name__ == "__main__":
     if True:
         df = _main()
+        extend_data(df)
+#        tmp_plot_psi_to_intens(df)
+        show_counts_to_variance(df, log=False)
+        
         
