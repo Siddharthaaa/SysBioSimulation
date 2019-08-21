@@ -54,7 +54,6 @@ class SimParam(object):
     def __init__(self, name, time=200, discr_points= 1001, params={}, init_state={}):
         self.name = str(name)
         self.runtime = time
-        self.raster_len = discr_points
         self.set_raster_count(discr_points)
         self.params=params
         
@@ -74,6 +73,7 @@ class SimParam(object):
         self.bimodality = {}
         self.results={}
     def set_raster_count(self, discr_points):
+        self.raster_len = discr_points
         self.raster =  sp.linspace(0,self.runtime,int(discr_points))
     def get_all_params(self):
         params = {}
@@ -206,6 +206,7 @@ class SimParam(object):
         params = self.get_all_params()
         initial_state = params["init_state"]
         tt = params["raster"]
+        print("raster:" ,len(tt))
         self._constants = np.array(list(self.params.values()))
         sim_st = compute_stochastic_evolution(self.get_reacts(),
                                               self._state,
@@ -525,7 +526,7 @@ class SimParam(object):
         return list(self.init_state.keys()).index(name) +1
     
     def compute_psi(self, products = ["Incl", "Skip"], solution="stoch_rastr",
-                    ignore_extremes = False, ignore_fraction=0.1, recognize_threshold = 1):
+                    ignore_extremes = False, ignore_fraction=0.1, recognize_threshold = 1, exact_sum = None):
         
 #        print("compute psi...")
         sim_st_raster = self.results[solution]
@@ -537,7 +538,10 @@ class SimParam(object):
         if ignore_extremes:
             indices_extr = [np.where((incl_counts != 0) * (skip_counts != 0))]
             indices = np.intersect1d(indices, indices_extr)
-        
+        if exact_sum is not None:
+            indices_extr = [np.where(incl_counts + skip_counts == exact_sum)]
+            indices = np.intersect1d(indices, indices_extr)
+            
         indices = indices[np.where(indices >= start_ind)]
 #        print(len(incl_counts), len(skip_counts))
         
@@ -624,7 +628,7 @@ class SimParam(object):
         return fig, ax
     
     def plot_course(self, ax = None, res=["ODE","stoch"], products=[], rng = None,
-                    line_width=2, scale = 1, plot_mean=False):
+                    line_width=2, scale = 1, plot_mean=False, plot_psi=False):
         if ax == None:
             fig, ax = plt.subplots(1, figsize=(10*scale,10*scale))
         
@@ -654,6 +658,11 @@ class SimParam(object):
                 ax.plot(tt,ode_res[:rng,index],"--", color = color, lw = 1.5*line_width, label = name + "(ODE)")
         
         #ax.yaxis.set_label_coords(-0.28,0.25)
+        if(plot_psi):
+            ax_psi = ax.twinx()
+            (indx, psis) = self.compute_psi()
+            ax_psi.plot(self.raster[indx], psis, ".", markersize=line_width*5, label = "PSI")
+            ax_psi.set_ylabel("PSI")
         ax.set_ylabel(self.param_str("\n"), rotation=0, fontsize="large" )
 #        ax.set_ylabel("#")
         ax.set_xlabel("time",fontsize="large" )
@@ -1055,6 +1064,8 @@ def hill(x, Ka, n):
 
 def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
     s = None
+    if(type(name) != str):
+        name = "basic"
     if(name == "basic"):
         s1= s2 = s3 = d1 = d2 = d3 = d0 = 1
         d1 = 0.1
@@ -1064,7 +1075,7 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         name="Basic"
         s = SimParam(name,100, 1001,
                      params = {"v_syn": k_syn, "s1": s1, "s2": s2, "s3": s3, "d0": d0, "d1": d1, "d2": d2, "d3": d3},
-                     init_state = {"pre_RNA": 10, "Incl": 3, "Skip":2, "ret": 1})
+                     init_state = {"pre_RNA": 1, "Incl": 1, "Skip":1, "ret": 1})
         
         s.simulate_ODE = True
         

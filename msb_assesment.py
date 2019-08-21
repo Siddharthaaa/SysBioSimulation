@@ -11,7 +11,7 @@ https://www.embopress.org/doi/10.15252/msb.20156278#msb156278-fig-0002
 
 import pandas as pd
 import numpy as np
-from summarize_BRIE_output import *
+from support_th import *
 
 excl_path = "dates/msbfig2.xlsx"
 
