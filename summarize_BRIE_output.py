@@ -538,12 +538,23 @@ def tmp_simulate_std_binomial(counts, psi_means):
         res_all[i] = np.std(tries, ddof=1)
     return res_all
         
+def simulate_dropout(counts, psi_means, d_out = 0.5):
+    res = np.zeros(len(counts))
+    i = 0
+    for c, psi in zip(counts, psi_means):
+        M = c/d_out
+        n = M*psi
+        N = c
+        res[i] = sp.stats.hypergeom.std(M,n,N)/N
+        i+=1
+    return res
 
 def tmp_compare_binomial_gillespie(counts, psi_means):
     fig = plt.figure()
     binom = sp.stats.binom.std(counts, psi_means)/counts
-    gillespie = tmp_simulate_std_gillespie(counts, psi_means, runtime=1e4)
+#    gillespie = tmp_simulate_std_gillespie(counts, psi_means, runtime=1e4)
 #    gillespie = tmp_simulate_std_binomial(counts, psi_means)
+    gillespie = simulate_dropout(counts, psi_means,0.9)
     ax = fig.add_subplot(111)
     cm = plt.cm.get_cmap('RdYlBu')
     ax.scatter(binom, gillespie, s = psi_means*300, c = counts, cmap = cm, alpha=0.35)
@@ -553,10 +564,10 @@ def tmp_compare_binomial_gillespie(counts, psi_means):
     ax.plot([0,np.max(binom)],[0,np.max(binom)], c="r")
     return 0
 #
-#anz = 2000
-#psi_means = np.random.beta(2,2,size= anz)
-#counts = np.random.randint(1,40, anz)
-#tmp_compare_binomial_gillespie(counts,psi_means)
+anz = 200
+psi_means = np.random.beta(4,4,size= anz)
+counts = np.random.randint(1,40, anz)
+tmp_compare_binomial_gillespie(counts,psi_means)
 ##s=sims_tmp[0]
 ##s_res = s.compute_psi()
 ##s.plot_course()
