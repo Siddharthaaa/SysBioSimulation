@@ -372,8 +372,8 @@ class SimParam(object):
 #                            log[x,y] =  2
 #                    tmp +=1
                         
-                    r1 = xoroshiro128p_uniform_float64(rng_st, thid*2)
-                    r2 = xoroshiro128p_uniform_float64(rng_st, thid*2+1)
+                    r1 = xoroshiro128p_uniform_float32(rng_st, thid*2)
+                    r2 = xoroshiro128p_uniform_float32(rng_st, thid*2+1)
                     gpu_rates_func(STATES[t_ind], constants_all, rates_b)
 #                    tmp = 0
 #                    for r in rates_b:
@@ -381,7 +381,7 @@ class SimParam(object):
 #                            log[x,y] =  3
 #                        tmp +=1
 
-                    a_0 = 0.
+                    a_0 =0
                     for i in range(len(rates_b)):
                         a_0 += rates_b[i]
 #                        if(rates_b[i]<0 and log[x,y] == 0):
@@ -679,7 +679,7 @@ class SimParam(object):
         for xx in range(x):
             for yy in range(y):
                 self.results["stoch_rastr"]=cuda_res[xx,yy]
-                self.plot_course(ax = ax[xx,yy])
+                self.plot_course(ax = ax[xx,yy], res=["stoch"])
                 ax[xx,yy].set_ylabel("")
                 ax[xx,yy].set_xlabel("")
                 ax[xx,yy].set_title("")

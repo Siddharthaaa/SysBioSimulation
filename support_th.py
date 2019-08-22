@@ -514,35 +514,46 @@ def show_counts_to_variance(df = None, gillespie = False, log = False):
     if log:
         counts = np.log(counts)
     fig = plt.figure(figsize = (12,6))
-    ax = fig.add_subplot(1,3,1)
     
-    psis_tmp = [0.05, 0.1, 0.2, 0.5, 0.8, 0.9, 0.95]
-    cols = cm.rainbow(np.array(psis_tmp))
-    ax.scatter(counts, psi_stds, label = "")
-    ax.set_ylabel("std(PSI)")
-    ax.set_xlabel("mean(counts)")
+    psis_tmp = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5]
+    cols = cm.rainbow(np.array(psis_tmp)/0.5)
+    
+#    ax.scatter(counts, psi_stds, label = "")
+    
     points = 100
     counts_theo = np.linspace(counts.min(), counts.max(), points)
+    low_lim = 0
+    i=1
     for psi, col  in zip (psis_tmp, cols):
-        indx = np.where(psi_stds > psi)
-        print(col)
+        high_lim = 1 - low_lim
+        psi_high = 1 - psi
+        ax = fig.add_subplot(2,len(psis_tmp)/2,i)
+        ax.set_ylabel("std(PSI)")
+        ax.set_xlabel("mean(counts)")
+        indx_l = np.where((psi_stds >= low_lim) * (psi_stds < psi))
+        indx_h = np.where((psi_stds <= high_lim) * (psi_stds > psi_high))
+        low_lim = psi
+        indx = np.union1d(indx_l, indx_h)
         ax.scatter(counts[indx], psi_stds[indx],c=col, label = "")
         psis_th = np.ones(points)*psi
         ax.plot(counts_theo, sp.stats.binom.std(counts_theo, psis_th )/counts_theo,
-                label = "psi: %2.2f" % psi, lw=1)
+                label = "psi: %2.2f" % psi,c = col, lw=1)
 #        ax = fig.add_subplot(1,3,2)
-    ax.legend()    
+        i+=1
+        ax.legend()    
     
-    ax = fig.add_subplot(1,3,2)
+    fig = plt.figure(figsize = (12,6))
+    ax = fig.add_subplot(1,2,1)
     ax.scatter(psi_means, psi_stds, label = "")
     ax.set_ylabel("std(psi)")
     ax.set_xlabel("mean(psi)")
-    for count in np.linspace(counts.min(), counts.max()*1.2, 4):
+    #TODO
+    for count in np.quantile(counts, [0.2, 0.4, 0.6, 0.8]):
         psis_tmp = np.linspace(0,1, 50)
         stds_tmp = sp.stats.binom.std(count, psis_tmp )/count
         ax.plot(psis_tmp, stds_tmp, label = "counts= %d" % count, lw=0.7)
     ax.legend()
-    ax = fig.add_subplot(1,3,3)
+    ax = fig.add_subplot(1,2,2)
     psi_std_theory = sp.stats.binom.std(counts, psi_means)/counts
     ax.scatter(psi_stds, psi_std_theory, label="binomial sim")
     ax.set_ylabel("std(PSI) simulated")
