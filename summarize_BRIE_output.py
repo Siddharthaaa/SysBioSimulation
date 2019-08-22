@@ -54,10 +54,10 @@ def _main():
         summary_df[(c_name, "PSI")] = cell_df["Psi"]
         
     summary_df.set_index(cell_df["gene_id"].values, inplace=True)
-    df = perform_QC(summary_df, min_counts = 2e5, min_se = 3000, max_share=0.9,
-                    top_se_count=100, min_reads=5, min_cells=15)
-    df_f_s = perform_QC(summary_df, min_counts = 2e5, min_se = 4000, max_share=0.8,
-                    top_se_count=100, min_reads=5, min_cells=20)
+#    df = perform_QC(summary_df, min_counts = 2e5, min_se = 3000, max_share=0.9,
+#                    top_se_count=100, min_reads=5, min_cells=15)
+    df_f_s = perform_QC(summary_df, min_counts = 2e5, min_se = 2000, max_share=0.8,
+                    top_se_count=100, min_reads=5, min_cells=40)
     
 #    general_analysis(df, th_suppoints = 20)
 #    show_splicing_data(df)
@@ -65,7 +65,7 @@ def _main():
     
     
     return df_f_s
-
+    
 
 
 
@@ -77,6 +77,7 @@ if __name__ == "__main__":
         df = _main()
         extend_data(df)
 #        tmp_plot_psi_to_intens(df)
-        show_counts_to_variance(df, log=False)
+        show_counts_to_variance(df, log=True)
+        mean_counts = df["mean_counts"].values
         
         

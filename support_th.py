@@ -143,6 +143,18 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
 
     return texts
 
+def plot_3d(x, y, zz):
+    fig = plt.figure(figsize=(7,7))
+    ax = fig.gca(projection='3d')
+    
+    X, Y = np.meshgrid(x,y)
+    #ax.plot_trisurf(x, y, z, linewidth=0.2, antialiased=True)
+    ax.plot_surface(X,Y,zz.T,  cmap=cm.coolwarm)
+    #ax.plot_wireframe(x,y,z,  cmap=cm.coolwarm)
+    
+    plt.show()
+    return ax
+
 def perform_QC(df= None, min_counts = 1e5, min_se = 3000, max_share = 0.9,
                top_se_count = 100, min_reads = 5, min_cells = 10 ):
     #https://genomebiology.biomedcentral.com/track/pdf/10.1186/s13059-019-1644-0
@@ -178,7 +190,7 @@ def perform_QC(df= None, min_counts = 1e5, min_se = 3000, max_share = 0.9,
     # (i)
     
     # (ii)
-    col_idx = np.sum(df.loc[:, (slice(None), "counts" )].values > 1e-10, 0) < min_se
+    col_idx = np.sum(df.loc[:, (slice(None), "counts" )].values > min_reads, 0) < min_se
     cell_ids = df.columns.levels[0].values[col_idx]
     df.drop(columns = cell_ids, level=0, inplace = True)
     df.columns = pd.MultiIndex.from_tuples(list(df), names = mux_names)
@@ -500,17 +512,23 @@ def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
 
 
 def extend_data(df):
-    if not df.columns.contains("Bscore"):
+    if not "Bscore" in df:
         df["Bscore"] = [bs.get_bimodal_score(a, tendency=True) for a in df.loc[:,(slice(None),"PSI")].values ]
-    if not df.columns.contains("mean"):
+    if not "mean" in df:
         df["mean"] = [np.nanmean(a) for a in df.loc[:,(slice(None),"PSI")].values ]
-    if not df.columns.contains("std"):
+    if not "mean_counts" in df:
+        df["mean_counts"] = [np.nanmean(a) for a in df.loc[:,(slice(None),"counts")].values ]
+    if not "std" in df:
         df["std"] = [np.nanstd(a) for a in df.loc[:,(slice(None),"PSI")].values ]
 
-def show_counts_to_variance(df = None, gillespie = False, log = False):
+def show_counts_to_variance(df = None, gillespie = False, log = False, keep_quantile=0.9):
+    
+    counts = np.nanmean(df.loc[:,(slice(None), "counts")], axis=1)
+    df = df[counts <= np.quantile(counts, keep_quantile)] 
     psi_stds = df["std"].values
     psi_means = df["mean"].values
     counts = np.nanmean(df.loc[:,(slice(None), "counts")], axis=1)
+    
     if log:
         counts = np.log(counts)
     fig = plt.figure(figsize = (12,6))
@@ -519,22 +537,22 @@ def show_counts_to_variance(df = None, gillespie = False, log = False):
     cols = cm.rainbow(np.array(psis_tmp)/0.5)
     
 #    ax.scatter(counts, psi_stds, label = "")
-    
-    points = 100
+    ax = fig.add_subplot(111)
+    points = 50
     counts_theo = np.linspace(counts.min(), counts.max(), points)
     low_lim = 0
     i=1
     for psi, col  in zip (psis_tmp, cols):
         high_lim = 1 - low_lim
         psi_high = 1 - psi
-        ax = fig.add_subplot(2,len(psis_tmp)/2,i)
+#        ax = fig.add_subplot(2,len(psis_tmp)/2,i)
         ax.set_ylabel("std(PSI)")
         ax.set_xlabel("mean(counts)")
         indx_l = np.where((psi_means >= low_lim) * (psi_means < psi))
         indx_h = np.where((psi_means <= high_lim) * (psi_means > psi_high))
         low_lim = psi
         indx = np.union1d(indx_l, indx_h)
-        ax.scatter(counts[indx], psi_stds[indx],c=col, label = "")
+        ax.scatter(counts[indx], psi_stds[indx],c=col.reshape((1,4)), label = "")
         psis_th = np.ones(points)*psi
         ax.plot(counts_theo, sp.stats.binom.std(counts_theo, psis_th )/counts_theo,
                 label = "psi: %2.2f" % psi,c = col, lw=1)
@@ -542,13 +560,29 @@ def show_counts_to_variance(df = None, gillespie = False, log = False):
         i+=1
         ax.legend()    
     
+    #3D plot with the same information
+#    counts_ln = np.linspace(5,np.quantile(counts, 0.9),50)
+    counts_ln = np.linspace(3, np.max(counts),40)
+    psi_means_ln = np.linspace(0,1,40)
+    
+    psi_std_th = np.zeros((len(counts_ln), len(psi_means_ln)))
+    for i in range(len(counts_ln)):
+        for j in range(len(psi_means_ln)):
+            psi_std_th[i,j] = sp.stats.binom.std(counts_ln[i], psi_means_ln[j])/counts_ln[i]
+    fig = plt.figure(figsize=(7,7))
+    ax = fig.gca(projection='3d')
+    X, Y = np.meshgrid(counts_ln,psi_means_ln)
+    #ax.plot_trisurf(x, y, z, linewidth=0.2, antialiased=True)
+    ax.plot_surface(X,Y,psi_std_th.T,  cmap=cm.coolwarm)
+    ax.scatter3D(counts, psi_means, psi_stds)
+    
     fig = plt.figure(figsize = (12,6))
     ax = fig.add_subplot(1,2,1)
     ax.scatter(psi_means, psi_stds, label = "")
     ax.set_ylabel("std(psi)")
     ax.set_xlabel("mean(psi)")
     #TODO
-    for count in np.quantile(counts, [0.2, 0.4, 0.6, 0.8]):
+    for count in np.quantile(counts, [0.1, 0.3, 0.5, 0.7,1]):
         psis_tmp = np.linspace(0,1, 50)
         stds_tmp = sp.stats.binom.std(count, psis_tmp )/count
         ax.plot(psis_tmp, stds_tmp, label = "counts= %d" % count, lw=0.7)

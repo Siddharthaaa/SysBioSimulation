@@ -24,7 +24,7 @@ from sklearn.decomposition import PCA
 
 from support_th import *
 if __name__ == "__main__":
-    anz = 200
+    anz = 500
     psi_means = np.random.beta(4,4,size= anz)*0.4 + 0.3
     counts = np.random.randint(1,10, anz)
     tmp_compare_binomial_gillespie(counts,psi_means)
