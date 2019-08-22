@@ -530,8 +530,8 @@ def show_counts_to_variance(df = None, gillespie = False, log = False):
         ax = fig.add_subplot(2,len(psis_tmp)/2,i)
         ax.set_ylabel("std(PSI)")
         ax.set_xlabel("mean(counts)")
-        indx_l = np.where((psi_stds >= low_lim) * (psi_stds < psi))
-        indx_h = np.where((psi_stds <= high_lim) * (psi_stds > psi_high))
+        indx_l = np.where((psi_means >= low_lim) * (psi_means < psi))
+        indx_h = np.where((psi_means <= high_lim) * (psi_means > psi_high))
         low_lim = psi
         indx = np.union1d(indx_l, indx_h)
         ax.scatter(counts[indx], psi_stds[indx],c=col, label = "")
