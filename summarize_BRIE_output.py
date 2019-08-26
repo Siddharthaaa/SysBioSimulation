@@ -77,7 +77,7 @@ if __name__ == "__main__":
         df = _main()
         extend_data(df)
 #        tmp_plot_psi_to_intens(df)
-        show_counts_to_variance(df, log=True)
+        show_counts_to_variance(df, gillespie=True, log=False, rnaseq_efficiency=0.6)
         mean_counts = df["mean_counts"].values
         
         

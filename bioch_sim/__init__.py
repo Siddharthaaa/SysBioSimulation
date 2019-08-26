@@ -195,7 +195,7 @@ class SimParam(object):
         self._dynamic_compile = dynamic
 #        self._rates_function = types.MethodType( self._rates_function, self )
         return func_str
-    def simulate(self, ODE = False, ret_raw=False, max_steps = 1e9):
+    def simulate(self, ODE = False, ret_raw=False, max_steps = 1e10):
         if not self._is_compiled:
             self.compile_system(dynamic=True)
         self._state = list(self.init_state.values())
@@ -526,13 +526,18 @@ class SimParam(object):
         return list(self.init_state.keys()).index(name) +1
     
     def compute_psi(self, products = ["Incl", "Skip"], solution="stoch_rastr",
-                    ignore_extremes = False, ignore_fraction=0.1, recognize_threshold = 1, exact_sum = None):
+                    ignore_extremes = False, ignore_fraction=0.1, recognize_threshold = 1,
+                    exact_sum = None, sim_rnaseq = None):
         
 #        print("compute psi...")
         sim_st_raster = self.results[solution]
         start_ind = int(len(sim_st_raster)*ignore_fraction)
-        incl_counts = self.get_res_col(products[0])
-        skip_counts = self.get_res_col(products[1])
+        incl_counts = np.array(self.get_res_col(products[0]), dtype=np.int64)
+        skip_counts = np.array(self.get_res_col(products[1]), dtype=np.int64)
+        
+        if(sim_rnaseq is not None):
+            incl_counts = sp.stats.binom.rvs(incl_counts, sim_rnaseq)
+            skip_counts = sp.stats.binom.rvs(skip_counts, sim_rnaseq)
         
         indices =  np.array(np.where(incl_counts + skip_counts >= recognize_threshold))
         if ignore_extremes:
@@ -547,6 +552,7 @@ class SimParam(object):
         
         incl_counts = incl_counts[indices]
         skip_counts = skip_counts[indices]
+        
         psi = incl_counts/(incl_counts+skip_counts)
 #        psi = psi[np.logical_not(np.isnan(psi))]
 #        np.nan_to_num(psi, False)

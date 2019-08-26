@@ -521,7 +521,8 @@ def extend_data(df):
     if not "std" in df:
         df["std"] = [np.nanstd(a) for a in df.loc[:,(slice(None),"PSI")].values ]
 
-def show_counts_to_variance(df = None, gillespie = False, log = False, keep_quantile=0.9):
+def show_counts_to_variance(df = None, gillespie = False, log = False,
+                            keep_quantile=0.9, rnaseq_efficiency = 1):
     
     counts = np.nanmean(df.loc[:,(slice(None), "counts")], axis=1)
     df = df[counts <= np.quantile(counts, keep_quantile)] 
@@ -554,8 +555,11 @@ def show_counts_to_variance(df = None, gillespie = False, log = False, keep_quan
         indx = np.union1d(indx_l, indx_h)
         ax.scatter(counts[indx], psi_stds[indx],c=col.reshape((1,4)), label = "")
         psis_th = np.ones(points)*psi
-        ax.plot(counts_theo, sp.stats.binom.std(counts_theo, psis_th )/counts_theo,
-                label = "psi: %2.2f" % psi,c = col, lw=1)
+        psi_stds_theo_bin = sp.stats.binom.std(counts_theo, psis_th )/counts_theo
+        psi_stds_theo_gil = tmp_simulate_std_gillespie(counts_theo, psis_th,
+                                                       runtime=1000, sim_rnaseq=rnaseq_efficiency)
+        ax.plot(counts_theo, psi_stds_theo_gil,"--",c = col, lw=1)
+        ax.plot(counts_theo, psi_stds_theo_bin, label = "psi: %2.2f" % psi,c = col, lw=1)
 #        ax = fig.add_subplot(1,3,2)
         i+=1
         ax.legend()    
@@ -582,7 +586,7 @@ def show_counts_to_variance(df = None, gillespie = False, log = False, keep_quan
     ax.set_ylabel("std(psi)")
     ax.set_xlabel("mean(psi)")
     #TODO
-    for count in np.quantile(counts, [0.1, 0.3, 0.5, 0.7,1]):
+    for count in np.quantile(counts, [0.05, 0.1, 0.2, 0.3, 0.5, 0.7,1]):
         psis_tmp = np.linspace(0,1, 50)
         stds_tmp = sp.stats.binom.std(count, psis_tmp )/count
         ax.plot(psis_tmp, stds_tmp, label = "counts= %d" % count, lw=0.7)
@@ -610,7 +614,8 @@ pars_tmp = []
 psis_tmp =[]
 counts_tmp = []
 results_tmp = []
-def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000, exact_counts = False):
+def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000,
+                               exact_counts = False, sim_rnaseq=None, extrapolate_counts = True):
     global pars_tmp, psis_tmp, counts_tmp,results_tmp, sim_tmp
     pars_tmp = []
     psis_tmp = []
@@ -621,10 +626,15 @@ def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000, exact_counts = F
     s.set_runtime(runtime)
     sim_tmp = s
     res = np.zeros(len(counts))
+    
+#    if(extrapolate_counts == True and sim_rnaseq is not None):
+#        counts = counts / sim_rnaseq
+    
     for i in range(len(counts)):
         c = counts[i]
         psi = psi_means[i]
         print("counts: ", c, "\n", "psi_mean: ", psi )
+        s.set_param("s1", 10)
         s1 = s.params["s1"]
         d1 = s.params["d1"]
         s.set_param("d2", d1)
@@ -637,15 +647,16 @@ def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000, exact_counts = F
         v_syn = pre_ss*(s1 + s2 + s3 + d0)
         
         s.set_param("s2", s2)
-        s.set_param("s1", 10)
-        s.set_param("s3", 0)
+        
+#        s.set_param("s3", 0)
         s.set_param("v_syn", v_syn)
         
         s.simulate()
         pars_tmp.append(s.params)
         results_tmp.append(s.results)
         (indx, psis) = s.compute_psi(ignore_extremes=False, recognize_threshold=1,
-                                    exact_sum= c if exact_counts else None)
+                                    exact_sum= c if exact_counts else None,
+                                    sim_rnaseq=sim_rnaseq)
         res[i] = np.nanstd(psis, ddof=0)
         psis_tmp.append(np.nanmean(psis))
         print(psis_tmp[-1])
@@ -694,6 +705,27 @@ def tmp_compare_binomial_gillespie(counts, psi_means, exact_counts=False):
     ax.set_ylabel("Gillespie, std")
     
     ax.plot([0,np.max(binom)],[0,np.max(binom)], c="r")
+    return 0
+
+def tmp_compare_gillespie(counts, psi_means, exact_counts=False, sim_rnaseq= 0.5):
+    fig = plt.figure()
+    gillespie_biased = tmp_simulate_std_gillespie(counts, psi_means, runtime=1e5,
+                                                  exact_counts=exact_counts,
+                                                  sim_rnaseq = sim_rnaseq)
+    gillespie_exact = tmp_simulate_std_gillespie(counts, psi_means, runtime=1e5,
+                                                 exact_counts=exact_counts)
+#    gillespie = tmp_simulate_std_binomial(counts, psi_means)
+#    gillespie = simulate_dropout(counts, psi_means,0.9)
+    ax = fig.add_subplot(111)
+    cm = plt.cm.get_cmap('RdYlBu')
+    paths = ax.scatter(gillespie_exact, gillespie_biased, s = psi_means*300, c = counts, cmap = cm, alpha=0.35)
+    cbar = fig.colorbar(paths, ax = ax)
+#    cbar = ax.figure.colorbar(None, ax=ax)
+    cbar.ax.set_ylabel("counts", rotation=-90, va="bottom")
+    ax.set_xlabel("Gillespie, std")
+    ax.set_ylabel("Gillespie + rnaSeq sim, std")
+    
+    ax.plot([0,np.max(gillespie_exact)],[0,np.max(gillespie_exact)], c="r")
     return 0
 
 
