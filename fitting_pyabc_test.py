@@ -9,6 +9,7 @@ Created on Thu Jul 18 16:11:31 2019
 
 from bioch_sim import *
 import pyabc
+import os
 
 v_syn = 10
 s1= 4

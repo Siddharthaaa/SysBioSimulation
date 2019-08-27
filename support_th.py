@@ -219,7 +219,7 @@ def perform_QC(df= None, min_counts = 1e5, min_se = 3000, max_share = 0.9,
         psis = df.loc[:, (c_id, "PSI")].values
         psis = np.where(reads < min_reads, np.nan, psis )
         df[(c_id, "PSI")] = psis
-    print(df)
+#    print(df)
     row_idx = np.sum(np.isnan(df.loc[:, (slice(None), "PSI" )].values) == False , 1) < min_cells
     g_id_to_drop = gene_ids[row_idx]
     df.drop(g_id_to_drop, inplace = True)
@@ -522,7 +522,7 @@ def extend_data(df):
         df["std"] = [np.nanstd(a) for a in df.loc[:,(slice(None),"PSI")].values ]
 
 def show_counts_to_variance(df = None, gillespie = False, log = False,
-                            keep_quantile=0.9, rnaseq_efficiency = 1):
+                            keep_quantile=0.9, rnaseq_efficiency = 1, extrapolate_counts = None):
     
     counts = np.nanmean(df.loc[:,(slice(None), "counts")], axis=1)
     df = df[counts <= np.quantile(counts, keep_quantile)] 
@@ -539,7 +539,7 @@ def show_counts_to_variance(df = None, gillespie = False, log = False,
     
 #    ax.scatter(counts, psi_stds, label = "")
     ax = fig.add_subplot(111)
-    points = 50
+    points = 25
     counts_theo = np.linspace(counts.min(), counts.max(), points)
     low_lim = 0
     i=1
@@ -557,7 +557,8 @@ def show_counts_to_variance(df = None, gillespie = False, log = False,
         psis_th = np.ones(points)*psi
         psi_stds_theo_bin = sp.stats.binom.std(counts_theo, psis_th )/counts_theo
         psi_stds_theo_gil = tmp_simulate_std_gillespie(counts_theo, psis_th,
-                                                       runtime=1000, sim_rnaseq=rnaseq_efficiency)
+                                                       runtime=1000, sim_rnaseq=rnaseq_efficiency,
+                                                       extrapolate_counts=extrapolate_counts)
         ax.plot(counts_theo, psi_stds_theo_gil,"--",c = col, lw=1)
         ax.plot(counts_theo, psi_stds_theo_bin, label = "psi: %2.2f" % psi,c = col, lw=1)
 #        ax = fig.add_subplot(1,3,2)
@@ -615,7 +616,7 @@ psis_tmp =[]
 counts_tmp = []
 results_tmp = []
 def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000,
-                               exact_counts = False, sim_rnaseq=None, extrapolate_counts = True):
+                               exact_counts = False, sim_rnaseq=None, extrapolate_counts = None):
     global pars_tmp, psis_tmp, counts_tmp,results_tmp, sim_tmp
     pars_tmp = []
     psis_tmp = []
@@ -627,13 +628,13 @@ def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000,
     sim_tmp = s
     res = np.zeros(len(counts))
     
-#    if(extrapolate_counts == True and sim_rnaseq is not None):
-#        counts = counts / sim_rnaseq
+    if(extrapolate_counts is not None):
+        counts = counts / extrapolate_counts
     
     for i in range(len(counts)):
         c = counts[i]
         psi = psi_means[i]
-        print("counts: ", c, "\n", "psi_mean: ", psi )
+#        print("counts: ", c, "\n", "psi_mean: ", psi )
         s.set_param("s1", 10)
         s1 = s.params["s1"]
         d1 = s.params["d1"]
@@ -659,7 +660,7 @@ def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000,
                                     sim_rnaseq=sim_rnaseq)
         res[i] = np.nanstd(psis, ddof=0)
         psis_tmp.append(np.nanmean(psis))
-        print(psis_tmp[-1])
+#        print(psis_tmp[-1])
         counts_tmp.append(np.mean(s.get_res_col("Incl")[100:] + s.get_res_col("Skip")[100:]))
         
     return res

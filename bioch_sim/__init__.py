@@ -206,7 +206,7 @@ class SimParam(object):
         params = self.get_all_params()
         initial_state = params["init_state"]
         tt = params["raster"]
-        print("raster:" ,len(tt))
+#        print("raster:" ,len(tt))
         self._constants = np.array(list(self.params.values()))
         sim_st = compute_stochastic_evolution(self.get_reacts(),
                                               self._state,
