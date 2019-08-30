@@ -553,7 +553,14 @@ def show_counts_to_variance(df = None, gillespie = False, log = False,
         indx_h = np.where((psi_means <= high_lim) * (psi_means > psi_high))
         low_lim = psi
         indx = np.union1d(indx_l, indx_h)
-        ax.scatter(counts[indx], psi_stds[indx],c=col.reshape((1,4)), label = "")
+        p_stds = psi_stds[indx]
+        cs = counts[indx]
+        ax.scatter(cs, p_stds, c=col.reshape((1,4)), label = "")
+        psi_stds_theo_gil = tmp_simulate_std_gillespie(cs, p_stds,
+                                                       runtime=1000, sim_rnaseq=rnaseq_efficiency,
+                                                       extrapolate_counts=extrapolate_counts)
+        ax.plot(cs, psi_stds_theo_gil,"x",c =col)
+        
         psis_th = np.ones(points)*psi
         psi_stds_theo_bin = sp.stats.binom.std(counts_theo, psis_th )/counts_theo
         psi_stds_theo_gil = tmp_simulate_std_gillespie(counts_theo, psis_th,
@@ -611,21 +618,16 @@ def show_counts_to_variance(df = None, gillespie = False, log = False,
     
     return fig
 
-pars_tmp = []
-psis_tmp =[]
-counts_tmp = []
-results_tmp = []
 def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000,
-                               exact_counts = False, sim_rnaseq=None, extrapolate_counts = None):
-    global pars_tmp, psis_tmp, counts_tmp,results_tmp, sim_tmp
-    pars_tmp = []
-    psis_tmp = []
-    counts_tmp = []
+                               exact_counts = False,
+                               sim_rnaseq=None,
+                               extrapolate_counts = None,
+                               var_stab = False):
+   
     s =bs.get_exmpl_sim("basic")
     s.simulate_ODE = False
     s.set_raster_count(10001)
     s.set_runtime(runtime)
-    sim_tmp = s
     res = np.zeros(len(counts))
     
     if(extrapolate_counts is not None):
@@ -653,16 +655,13 @@ def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000,
         s.set_param("v_syn", v_syn)
         
         s.simulate()
-        pars_tmp.append(s.params)
-        results_tmp.append(s.results)
         (indx, psis) = s.compute_psi(ignore_extremes=False, recognize_threshold=1,
                                     exact_sum= c if exact_counts else None,
                                     sim_rnaseq=sim_rnaseq)
+        if var_stab:
+            psis = np.arcsin(np.sqrt(psis))
         res[i] = np.nanstd(psis, ddof=0)
-        psis_tmp.append(np.nanmean(psis))
-#        print(psis_tmp[-1])
-        counts_tmp.append(np.mean(s.get_res_col("Incl")[100:] + s.get_res_col("Skip")[100:]))
-        
+    del s
     return res
 
 
@@ -730,6 +729,49 @@ def tmp_compare_gillespie(counts, psi_means, exact_counts=False, sim_rnaseq= 0.5
     return 0
 
 
+def filter_assumed_hkg(df = None, psi = (0.2, 0.8), max_counts_cv = 0.2,
+                       min_counts_p = 0.1, min_psis_p = 0.1 ):
+    df = df.copy()
+    df_t = df[(df["mean"].values > psi[0]) * (df["mean"].values < psi[1])]
+    
+    counts_all = df_t.loc[:, (slice(None), "counts")].values
+    psis_all = df_t.loc[:, (slice(None), "PSI")].values
+    
+    counts_ps = []
+    counts_Ds = []
+    for counts in counts_all:   
+        mean = np.nanmean(counts)
+        std = np.nanstd(counts)
+        
+        (D, p) = sp.stats.kstest(counts, "norm", args = (mean,std) )
+        counts_ps.append(p)
+        counts_Ds.append(D)
+    counts_ps = np.array(counts_ps)
+    counts_Ds = np.array(counts_Ds)
+    
+    psis_ps = []
+    psis_Ds = []
+    for psis in psis_all:   
+        psis = psis[~np.isnan(psis)]
+        mean = np.nanmean(psis)
+        std = np.nanstd(psis)
+        
+        (D, p) = sp.stats.kstest(psis, "norm", args = (mean,std) )
+        psis_ps.append(p)
+        psis_Ds.append(D)
+    psis_ps = np.array(psis_ps)
+    psis_Ds = np.array(psis_Ds)
+#    plt.hist(psis_all[1])
+    
+#    indx = np.argsort(ps)[-best_n:]
+    indx = np.where((psis_ps >= min_psis_p) * (counts_ps >= min_counts_p))
+    
+#    for counts in psis_all[indx]:
+#        plt.figure()
+#        plt.hist(counts)
+    
+    return df_t.iloc[indx]
+    
 if __name__ == "__main__":
     None
     

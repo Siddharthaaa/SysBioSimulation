@@ -17,14 +17,53 @@ import pyabc as pa
 import pandas as pd
 import support_th as sth
 import bioch_sim as bs
+import glob
+
+
+def read_data():
+    BRIE_dir = os.path.join("/home","timur","ext","working_dir","PRJEB15062", "BRIE_output")
+    cell_paths = glob.glob(os.path.join(BRIE_dir, "*"))
+    cell_names = [os.path.basename(c_n) for c_n in cell_paths]
+    
+    mux = pd.MultiIndex.from_product([cell_names, ["counts", "FPKM",  "PSI"]], names = ["cell_ID", "value"])
+    
+    summary_df = pd.DataFrame(columns=mux)
+    
+    cell_df = pd.DataFrame()
+    for c_path in cell_paths:
+        c_name = os.path.basename(c_path)
+    #    print("read cell values for: "  + c_name)
+        f_c_path = os.path.join(c_path, "fractions.tsv")
+        cell_df_raw = pd.read_csv(f_c_path, "\t", low_memory = False)
+        indexes = cell_df_raw.tran_id.str.contains("in$").values
+        cell_df = cell_df_raw[indexes]
+        cell_df_out = cell_df_raw[indexes == False]
+        cell_df.counts = cell_df["counts"].values + cell_df_out.counts.values
+        cell_df.FPKM = cell_df.FPKM.values + cell_df_out.FPKM.values
+        
+        summary_df[(c_name, "counts")] = cell_df["counts"]
+        summary_df[(c_name, "FPKM")] = cell_df["FPKM"]
+        summary_df[(c_name, "PSI")] = cell_df["Psi"]
+        
+    summary_df.set_index(cell_df["gene_id"].values, inplace=True)
+#    df = perform_QC(summary_df, min_counts = 2e5, min_se = 3000, max_share=0.9,
+#                    top_se_count=100, min_reads=5, min_cells=15)
+    df_f_s = sth.perform_QC(summary_df, min_counts = 2e5, min_se = 2000, max_share=0.8,
+                    top_se_count=100, min_reads=5, min_cells=40)
+    sth.extend_data(df_f_s)
+    return df_f_s
 
 
 s = bs.get_exmpl_sim()
-df = read_data()
+df_raw = read_data()
+df = sth.filter_assumed_hkg(df_raw, psi = (0.2, 0.8), max_counts_cv = 0.2,
+                       min_counts_p = 0.2, min_psis_p = 0.2 )
 
 counts = df["mean_counts"].values
 psis = df["mean"].values
-psi_stds = df["std"].values
+#psi_stds = df["std"].values
+psi_stds = np.nanstd(df.loc[:, (slice(None), "PSI")].values, axis = 1)
+
 m_i = 0
 def model(parameters):
     global m_i
@@ -36,7 +75,8 @@ def model(parameters):
     print("Model eval: ", m_i)
     stds = sth.tmp_simulate_std_gillespie(counts, psis,
                                           sim_rnaseq=seq_ql,
-                                          extrapolate_counts=ex_pol)
+                                          extrapolate_counts=ex_pol,
+                                          var_stab = True)
     return {"y": stds}
 
 models = [model]
@@ -82,19 +122,19 @@ abc_id = abc.new(db_path, {"y": y_observed})
 
 print("ABC-SMC run ID:", abc_id)
 
-history = abc.run(minimum_epsilon=0.05, max_nr_populations=8)
+history = abc.run(minimum_epsilon=0.05, max_nr_populations=10)
 model_probabilities = history.get_model_probabilities()
 model_probabilities
 pa.visualization.plot_model_probabilities(history)
 
 #get extimated params 
-df, w = history.get_distribution(m=0, t=5)
+#df, w = history.get_distribution(m=0, t=5)
 
 fig, ax = plt.subplots()
 for t in range(history.max_t+1):
-    df, w = history.get_distribution(m=0, t=t)
+    df_res, w = history.get_distribution(m=0, t=t)
     pa.visualization.plot_kde_1d(
-        df, w,
+        df_res, w,
         xmin=0, xmax=2,
         x="ex_pol", ax=ax,
         label="PDF t={}".format(t))
@@ -105,39 +145,5 @@ for t in range(history.max_t+1):
 #ax.axvline(observation, color="k", linestyle="dashed");
 ax.legend();
 
-def read_data():
-    excl_path = "dates/msbfig3.xlsx"
-    
-    
-    counts_df = pd.read_excel(excl_path, 1)   
-    psi_df = pd.read_excel(excl_path, 2)
-    cell_types = counts_df["cell.population"].values 
-    cell_types = np.unique(cell_types)
-        
-    res_dfs = []
-    
-    cell_ids = counts_df.filter(regex="^\d+$")
-    
-    for cell_t in cell_types:
-    #        res_df = pd.DataFrame()
-        mux = pd.MultiIndex.from_product([cell_ids, ["counts", "FPKM",  "PSI"]], names = ["cell_ID", "value"])
-        res_df = pd.DataFrame(columns=mux)
-        for df , v_name in zip ([psi_df, counts_df, counts_df], ["PSI", "counts", "FPKM"]):
-            
-            filtered_df = df[counts_df["cell.population"] == cell_t]
-            
-            genes = filtered_df["gene.name"].values
-            
-            c_df = filtered_df.filter(regex="^\d+$")
-            
-            for col in c_df:
-                res_df[(col, v_name)] = c_df[col].values if v_name != "counts" else np.exp(c_df[col].values)
-    #                res_df[(col, v_name)] = c_df[col].values 
-                res_df.set_index(genes, inplace=True)
-    #        perform_QC(res_df, min_counts=100,min_se= 10, max_share=1, top_se_count=1, min_reads=5, min_cells=10 )
-        res_dfs.append(res_df)
-    
-    d = res_dfs[1]
-    d = sth.perform_QC(d, min_counts=100,min_se= 10, max_share=1, top_se_count=1, min_reads=5, min_cells=10 )
-    sth.extend_data(d)
-    return d
+if False:
+    s = sth.show_counts_to_variance(df, gillespie=False, log=False, keep_quantile=0.9, rnaseq_efficiency=0.14, extrapolate_counts=0.67)
