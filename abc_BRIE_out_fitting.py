@@ -9,6 +9,7 @@ Fitting counts-std(psi) dependence
 
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
+
 import numpy as np
 import os
 import tempfile
@@ -56,13 +57,20 @@ def read_data():
 
 s = bs.get_exmpl_sim()
 df_raw = read_data()
-df = sth.filter_assumed_hkg(df_raw, psi = (0.2, 0.8), max_counts_cv = 0.2,
+sth.extend_data(df_raw, True)
+df = sth.filter_assumed_hkg(df_raw, psi = (0.1, 0.9), counts_max_cv = 0.8,
                        min_counts_p = 0.2, min_psis_p = 0.2 )
 
 counts = df["mean_counts"].values
 psis = df["mean"].values
 #psi_stds = df["std"].values
-psi_stds = np.nanstd(df.loc[:, (slice(None), "PSI")].values, axis = 1)
+
+psis_all =  df.loc[:, (slice(None), "PSI")].values
+
+psi_stds = np.nanstd(psis_all, axis = 1)
+psis_all_stabilized = np.arcsin(np.sqrt(psis_all))
+psi_stds_stabilized = np.nanstd(psis_all_stabilized, axis = 1)
+
 
 m_i = 0
 def model(parameters):
@@ -112,6 +120,7 @@ abc.max_number_particles_for_distance_update = 100
 
 # y_observed is the important piece here: our actual observation.
 y_observed = psi_stds
+y_observed = psi_stds_stabilized
 # and we define where to store the results
 
 db_dir = tempfile.gettempdir()
@@ -145,5 +154,10 @@ for t in range(history.max_t+1):
 #ax.axvline(observation, color="k", linestyle="dashed");
 ax.legend();
 
+pa.visualization.plot_sample_numbers(history)
+pa.visualization.plot_epsilons(history)
+
 if False:
-    s = sth.show_counts_to_variance(df, gillespie=False, log=False, keep_quantile=0.9, rnaseq_efficiency=0.14, extrapolate_counts=0.67)
+    s = sth.show_counts_to_variance(df, gillespie=False, log=False, keep_quantile=1,
+                                    rnaseq_efficiency=0.105, extrapolate_counts=0.7,
+                                    var_stab_std=True)

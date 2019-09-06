@@ -108,12 +108,14 @@ class SimParam(object):
         if state is None:
             state=self._state
         return self._rates_function(state, self._constants, np.zeros(len(self._reactions)))
-    def get_reacts(self):
+    def get_reacts(self, state = None):
         #returns reaction matrix
+        if state is None:
+            state = self._state
         return self._reacts
     
-    def get_derivation(self):
-        return self._reacts.transpose().dot(self.get_rates())
+    def get_derivation(self, state = None):
+        return self.get_reacts(state).transpose().dot(self.get_rates())
     
     def get_latex(self):
         res = "\\begin{align}\
