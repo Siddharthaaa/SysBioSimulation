@@ -532,8 +532,8 @@ class SimParam(object):
 #        print("compute psi...")
         sim_st_raster = self.results[solution]
         start_ind = int(len(sim_st_raster)*ignore_fraction)
-        incl_counts = np.array(self.get_res_col(products[0]), dtype=np.int64)
-        skip_counts = np.array(self.get_res_col(products[1]), dtype=np.int64)
+        incl_counts = np.array(self.get_res_col(products[0]), dtype=np.int32)
+        skip_counts = np.array(self.get_res_col(products[1]), dtype=np.int32)
         
         if(sim_rnaseq is not None):
             incl_counts = sp.stats.binom.rvs(incl_counts, sim_rnaseq)
