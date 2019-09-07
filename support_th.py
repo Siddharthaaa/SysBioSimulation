@@ -15,6 +15,7 @@ import numpy as np
 import glob
 import os
 import pylab as plt 
+from matplotlib.lines import Line2D
 from sklearn.linear_model import LinearRegression
 from bioch_sim import *
 import bioch_sim as bs
@@ -219,7 +220,7 @@ def perform_QC(df= None, min_counts = 1e5, min_se = 3000, max_share = 0.9,
         psis = df.loc[:, (c_id, "PSI")].values
         psis = np.where(reads < min_reads, np.nan, psis )
         df[(c_id, "PSI")] = psis
-    print(df)
+#    print(df)
     row_idx = np.sum(np.isnan(df.loc[:, (slice(None), "PSI" )].values) == False , 1) < min_cells
     g_id_to_drop = gene_ids[row_idx]
     df.drop(g_id_to_drop, inplace = True)
@@ -511,7 +512,7 @@ def show_splicing_data(df=None, ax=None, best_n = 20, min_psi_th = 0.3):
     return (sorted_df, indx_pairs, df_corr)
 
 
-def extend_data(df):
+def extend_data(df, th_psi_std=False):
     if not "Bscore" in df:
         df["Bscore"] = [bs.get_bimodal_score(a, tendency=True) for a in df.loc[:,(slice(None),"PSI")].values ]
     if not "mean" in df:
@@ -520,13 +521,20 @@ def extend_data(df):
         df["mean_counts"] = [np.nanmean(a) for a in df.loc[:,(slice(None),"counts")].values ]
     if not "std" in df:
         df["std"] = [np.nanstd(a) for a in df.loc[:,(slice(None),"PSI")].values ]
+    if th_psi_std and not "th_psi_std" in df:
+        psi_stds = df["std"].values
+        counts_means = df["mean_counts"].values
+        df["th_psi_std"] = sp.stats.binom.std(counts_means, psi_stds)/counts_means
 
 def show_counts_to_variance(df = None, gillespie = False, log = False,
-                            keep_quantile=0.9, rnaseq_efficiency = 1):
+                            keep_quantile=0.9, rnaseq_efficiency = 1, extrapolate_counts = None,
+                            var_stab_std = False):
     
     counts = np.nanmean(df.loc[:,(slice(None), "counts")], axis=1)
     df = df[counts <= np.quantile(counts, keep_quantile)] 
     psi_stds = df["std"].values
+    if(var_stab_std):
+        psi_stds = np.nanstd(np.arcsin(np.sqrt(df.loc[:, (slice(None), "PSI")].values)), axis = 1)
     psi_means = df["mean"].values
     counts = np.nanmean(df.loc[:,(slice(None), "counts")], axis=1)
     
@@ -539,10 +547,18 @@ def show_counts_to_variance(df = None, gillespie = False, log = False,
     
 #    ax.scatter(counts, psi_stds, label = "")
     ax = fig.add_subplot(111)
-    points = 50
+    
+    psi_stds_theo_gil = tmp_simulate_std_gillespie(counts, psi_means,
+                                                       runtime=1000, sim_rnaseq=rnaseq_efficiency,
+                                                       extrapolate_counts=extrapolate_counts,
+                                                       var_stab = var_stab_std)
+    residues = psi_stds_theo_gil - psi_stds
+    
+    points = 25
     counts_theo = np.linspace(counts.min(), counts.max(), points)
     low_lim = 0
     i=1
+    
     for psi, col  in zip (psis_tmp, cols):
         high_lim = 1 - low_lim
         psi_high = 1 - psi
@@ -553,16 +569,37 @@ def show_counts_to_variance(df = None, gillespie = False, log = False,
         indx_h = np.where((psi_means <= high_lim) * (psi_means > psi_high))
         low_lim = psi
         indx = np.union1d(indx_l, indx_h)
-        ax.scatter(counts[indx], psi_stds[indx],c=col.reshape((1,4)), label = "")
+        p_stds = psi_stds[indx]
+        cs = counts[indx]
+        ax.plot(cs, p_stds,".", c=col, label = "", markersize=10)
+        
+        ax.plot(cs, psi_stds_theo_gil[indx],"x",c =col, markersize=10)
+        for i in range(len(cs)):
+            y1, y2 = psi_stds_theo_gil[indx][i], p_stds[i]
+            x = cs[i]
+            ax.plot([x,x], [y1,y2], "--", c = col)
+        
         psis_th = np.ones(points)*psi
         psi_stds_theo_bin = sp.stats.binom.std(counts_theo, psis_th )/counts_theo
-        psi_stds_theo_gil = tmp_simulate_std_gillespie(counts_theo, psis_th,
-                                                       runtime=1000, sim_rnaseq=rnaseq_efficiency)
-        ax.plot(counts_theo, psi_stds_theo_gil,"--",c = col, lw=1)
         ax.plot(counts_theo, psi_stds_theo_bin, label = "psi: %2.2f" % psi,c = col, lw=1)
+        
+#        psi_stds_theo_gil = tmp_simulate_std_gillespie(counts_theo, psis_th,
+#                                                       runtime=1000, sim_rnaseq=rnaseq_efficiency,
+#                                                       extrapolate_counts=extrapolate_counts)
+#        ax.plot(counts_theo, psi_stds_theo_gil,"--",c = col, lw=1)
+        
 #        ax = fig.add_subplot(1,3,2)
         i+=1
-        ax.legend()    
+    leg1 = ax.legend()   
+    l1 = Line2D([0],[0], marker="x", color = "black", markersize=10, linewidth=0, label = "simulated")
+    l2 = Line2D([0],[0],marker="o", color = "black", markersize=10,linewidth=0, label = "measured")
+    leg2 = ax.legend([l1,l2],["Simulated", "Measured"], loc = "upper center")
+    ax.add_artist(leg1)
+    fig = plt.figure(figsize = (16,6))
+    ax = fig.add_subplot(111)
+    ax.hist(residues)
+    ax.set_title("Residues")
+    
     
     #3D plot with the same information
 #    counts_ln = np.linspace(5,np.quantile(counts, 0.9),50)
@@ -610,30 +647,25 @@ def show_counts_to_variance(df = None, gillespie = False, log = False,
     
     return fig
 
-pars_tmp = []
-psis_tmp =[]
-counts_tmp = []
-results_tmp = []
 def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000,
-                               exact_counts = False, sim_rnaseq=None, extrapolate_counts = True):
-    global pars_tmp, psis_tmp, counts_tmp,results_tmp, sim_tmp
-    pars_tmp = []
-    psis_tmp = []
-    counts_tmp = []
+                               exact_counts = False,
+                               sim_rnaseq=None,
+                               extrapolate_counts = None,
+                               var_stab = False):
+   
     s =bs.get_exmpl_sim("basic")
     s.simulate_ODE = False
     s.set_raster_count(10001)
     s.set_runtime(runtime)
-    sim_tmp = s
     res = np.zeros(len(counts))
     
-#    if(extrapolate_counts == True and sim_rnaseq is not None):
-#        counts = counts / sim_rnaseq
+    if(extrapolate_counts is not None):
+        counts = counts / extrapolate_counts
     
     for i in range(len(counts)):
         c = counts[i]
         psi = psi_means[i]
-        print("counts: ", c, "\n", "psi_mean: ", psi )
+#        print("counts: ", c, "\n", "psi_mean: ", psi )
         s.set_param("s1", 10)
         s1 = s.params["s1"]
         d1 = s.params["d1"]
@@ -652,16 +684,13 @@ def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000,
         s.set_param("v_syn", v_syn)
         
         s.simulate()
-        pars_tmp.append(s.params)
-        results_tmp.append(s.results)
         (indx, psis) = s.compute_psi(ignore_extremes=False, recognize_threshold=1,
                                     exact_sum= c if exact_counts else None,
                                     sim_rnaseq=sim_rnaseq)
-        res[i] = np.nanstd(psis, ddof=0)
-        psis_tmp.append(np.nanmean(psis))
-        print(psis_tmp[-1])
-        counts_tmp.append(np.mean(s.get_res_col("Incl")[100:] + s.get_res_col("Skip")[100:]))
-        
+        if var_stab:
+            psis = np.arcsin(np.sqrt(psis))
+        res[i] = np.nanstd(psis, ddof=1)
+    del s
     return res
 
 
@@ -729,6 +758,55 @@ def tmp_compare_gillespie(counts, psi_means, exact_counts=False, sim_rnaseq= 0.5
     return 0
 
 
+def filter_assumed_hkg(df = None, psi = (0.2, 0.8), counts_max_cv = 0.2,
+                       min_counts_p = 0.1, min_psis_p = 0.1 ):
+    df = df.copy()
+    df_t = df[(df["mean"].values > psi[0]) * (df["mean"].values < psi[1])]
+    
+    counts_all = df_t.loc[:, (slice(None), "counts")].values
+    psis_all = df_t.loc[:, (slice(None), "PSI")].values
+    
+    counts_ps = []
+    counts_Ds = []
+    for counts in counts_all:   
+        mean = np.nanmean(counts)
+        std = np.nanstd(counts)
+        
+        (D, p) = sp.stats.kstest(counts, "norm", args = (mean,std) )
+        counts_ps.append(p)
+        counts_Ds.append(D)
+    counts_ps = np.array(counts_ps)
+    counts_Ds = np.array(counts_Ds)
+    
+    psis_ps = []
+    psis_Ds = []
+    for psis in psis_all:   
+        psis = psis[~np.isnan(psis)]
+        mean = np.nanmean(psis)
+        std = np.nanstd(psis)
+        
+        (D, p) = sp.stats.kstest(psis, "norm", args = (mean,std) )
+        psis_ps.append(p)
+        psis_Ds.append(D)
+    psis_ps = np.array(psis_ps)
+    psis_Ds = np.array(psis_Ds)
+    
+#    plt.hist(psis_all[1])
+    
+#    indx = np.argsort(ps)[-best_n:]
+    indx = np.where((psis_ps >= min_psis_p) * (counts_ps >= min_counts_p))
+    
+#    for counts in psis_all[indx]:
+#        plt.figure()
+#        plt.hist(counts)
+    df_t = df_t.iloc[indx]
+    
+    count_cvs =  sp.stats.variation(df_t.loc[:,(slice(None), "counts")].values, axis = 1)
+    indx = np.where(count_cvs < counts_max_cv)
+    
+    
+    return df_t.iloc[indx]
+    
 if __name__ == "__main__":
     None
     

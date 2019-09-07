@@ -108,12 +108,14 @@ class SimParam(object):
         if state is None:
             state=self._state
         return self._rates_function(state, self._constants, np.zeros(len(self._reactions)))
-    def get_reacts(self):
+    def get_reacts(self, state = None):
         #returns reaction matrix
+        if state is None:
+            state = self._state
         return self._reacts
     
-    def get_derivation(self):
-        return self._reacts.transpose().dot(self.get_rates())
+    def get_derivation(self, state = None):
+        return self.get_reacts(state).transpose().dot(self.get_rates())
     
     def get_latex(self):
         res = "\\begin{align}\
@@ -206,7 +208,7 @@ class SimParam(object):
         params = self.get_all_params()
         initial_state = params["init_state"]
         tt = params["raster"]
-        print("raster:" ,len(tt))
+#        print("raster:" ,len(tt))
         self._constants = np.array(list(self.params.values()))
         sim_st = compute_stochastic_evolution(self.get_reacts(),
                                               self._state,
