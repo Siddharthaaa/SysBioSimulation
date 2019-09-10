@@ -56,7 +56,7 @@ d3=0.500
 s1_t=1
 
 name="Ka1=%2.2f,s1_t =%2.2f, n1=%2.2f" % (Ka1, s1_t, n1)
-s = bs.SimParam(name, 2000, 10001,
+s = bs.SimParam(name, 2000, 20001,
              params = {"k_on": k_on, "k_off": k_off, "v_syn": v_syn, "s1": s1, "Ka1":Ka1, "n1":n1,
                        "s2": s2, "s3": s3, "d0": d0, "d1": d1, "d2": d2, "d3": d3, "s1_t":s1_t},
              init_state = {"Pr_on": 1, "Pr_off": 0, "pre_RNA": 0,
@@ -76,7 +76,7 @@ s.add_reaction("d2*Skip", {"Skip":-1}  )
 s.add_reaction("s3*pre_RNA", {"pre_RNA":-1, "ret":1} )
 s.add_reaction("d3*ret",  {"ret": -1} )
 
-for i in range(100):
+for i in range(10):
     s.add_reaction("s1*pre_RNA + pre_RNA* s1_t * (1/(1 + (Ka1/Incl)**n1) if Incl > 0 else 0)", {"pre_RNA":-1, "Incl":1})
 
 
@@ -170,17 +170,18 @@ r = s.results["stoch_rastr"]
 s.results["stoch_rastr"] = res1
 s.plot()
 
-sims_n = 32
+sims_n = 16
 
 start = timer()
 for i in range(sims_n**2):
     s.simulate()
-dt = timer() - start
-print(dt, " ss")
+dt_cpu = timer() - start
+print(dt_cpu, " ss")
 
 start = timer()
 res10 = s.simulate_cuda(params = {"s1": np.ones(sims_n, np.float32),
                                   "s2": np.random.uniform(size=sims_n)+1}, max_steps=1000)
 last_params = s.cuda_last_params
-dt = timer() - start
-print(dt, " ssss")
+dt_gpu = timer() - start
+print("CPU: ", dt_cpu)
+print("GPU: ", dt_gpu)
