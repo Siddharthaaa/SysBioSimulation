@@ -29,7 +29,6 @@ import pickle
 import re
 import numba as nb
 from sklearn.cluster import KMeans, MeanShift, k_means
-
 from numba import cuda
 from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32, xoroshiro128p_uniform_float64
 
@@ -679,6 +678,7 @@ class SimParam(object):
         return ax
     
     def plot_cuda(self):
+# plots a 2D grid of simulations
 #        fig = plt.figure()
         x,y = tuple(self.cuda_last_params.shape[:2])
         fig, ax = plt.subplots(x, y, sharex =True, sharey = True)
@@ -695,6 +695,45 @@ class SimParam(object):
                 
                 
         self.results["stoch_rastr"] = res_tmp
+    
+    def plot_par_var_1d(self, par = "s1", vals = [1,2,3,4,5],ax = None, func=None, **func_pars):
+        res = []
+        for v in vals:
+            self.set_param(par, v)
+            self.simulate()
+            res.append(func(**func_pars))
+        if ax is None:
+            fig, ax = plt.subplots()
+        
+        ax.plot(vals, res)
+        ax.set_ylabel(func.__func__.__name__ +   str(func_pars))
+        ax.set_xlabel(par)
+        
+        return ax
+    
+    def plot_par_var_2d(self, pars = {"s1":[1,2,3], "s2": [1,2,4]},ax = None, func=None, **func_pars):
+        
+        names = list(pars.keys())
+        
+        res = []
+        for par1 in pars[names[0]]:
+            r = []
+            self.set_param(names[0], par1)
+            for par2 in pars[names[1]]:
+                self.set_param(names[1], par2)
+                self.simulate()
+                r.append(func(**func_pars))
+            res.append(r)
+            
+        if ax is None:
+            fig, ax = plt.subplots()
+        
+        heatmap(np.array(res), pars[names[0]], pars[names[1]], ax, cbarlabel= func.__func__.__name__ +   str(func_pars) )
+        ax.set_xlabel(names[1])
+        ax.set_ylabel(names[0])
+        
+        return ax
+        
         
 def plot_hist(x,title = "Distribution", bins = 15, ax = None, scale=1, exp_maxi=3, max_range=None ):
     if ax == None:
@@ -860,7 +899,7 @@ def compute_stochastic_evolution(reactions, state, runtime, rate_func, constants
         
     
 #    return STATE[0:steps+1]
-#        print(steps)
+    print("Steps needed: ", steps)
     return STATE
 # define parameters  
 
@@ -1137,5 +1176,234 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         s.add_reaction("k1*Prey",{"Prey":1})
         s.add_reaction("k2*Prey*Predator",{"Prey":-1, "Predator":1})
         s.add_reaction("k3*(Predator)",{"Predator":-1})
-    return s
+    elif(name == "CoTrSplicing"):
+            
+        gene_len = 3000
+        u1_1_bs_pos = 150
+        u2_1_bs_pos = 1500
+        u1_2_bs_pos = 1700
+        u2_2_bs_pos = 2800
         
+        # consider https://science.sciencemag.org/content/sci/331/6022/1289/F5.large.jpg?width=800&height=600&carousel=1
+        #for Ux binding rates
+        params = {"pr_on": 2, "pr_off" : 0.1,
+                "elong_v": 50, # 40-80 nt per second . http://book.bionumbers.org/what-is-faster-transcription-or-translation/
+                "gene_len": gene_len,
+                "spl_rate": 0.0015,
+                "u1_1_bs_pos": u1_1_bs_pos , # U1 binding site position
+                "u1_2_bs_pos": u1_2_bs_pos ,
+                "u1_1_br": 0.004,  # binding rate of U1
+                "u1_1_ur": 0.001, # unbinding rate of U1
+                "u1_2_br": 0.004,  # binding rate of U1
+                "u1_2_ur": 0.001,  # unbinding rate of U1
+                "u2_1_bs_pos": u2_1_bs_pos, # U2 bind. site pos 1
+                "u2_2_bs_pos": u2_2_bs_pos,
+                "u2_1_br": 0.008,
+                "u2_2_br": 0.008,
+                "u2_1_ur": 0.001,
+                "u2_2_ur": 0.001,
+                "tr_term_rate": 1000,
+                "s1":1, "s2":1, "s3": 0.1,
+                "d0":0.01, "d1": 0.01, "d2":0.01, "d3":0.01
+                }
+        
+        
+        s = SimParam("Cotranscriptional splicing", 10000, 100001, params = params,
+                        init_state = {"Pol_on":0, "Pol_off": 1,
+                                      "nascRNA_bc": 0,
+                                      "Pol_pos": 0,
+                                      "Skip":0, "Incl": 0, "ret": 0,
+                                      "U1_1":0, "U1_2":0,   #Splicosome units U1 binded
+                                      "U2_1":0, "U2_2":0,
+                                      "Intr1":0, "Intr2":0, "Exon1":0,
+                                      "Intr1_ex":0, "Intr2_ex":0, "Exon1_ex":0})
+        
+        s.add_reaction("pr_on * Pol_off", 
+                       {"Pol_on":1, "Pol_off": -1,"Exon1":1, "Intr1":1,"Intr2":1, "Tr_dist": gene_len},
+                       name = "Transc. initiation")
+        
+        s.add_reaction("elong_v * Pol_on if Pol_pos < gene_len else 0",
+                       {"nascRNA_bc": 0, "Pol_pos":1, "Tr_dist":-1},
+                       name = "Elongation")
+        
+        # Ux (un)binding cinetics
+        s.add_reaction("u1_1_br * Intr1 if Pol_pos > u1_1_bs_pos and U1_1 < 1 else 0",
+                       {"U1_1":1}, "U1_1 binding")
+        s.add_reaction("u1_1_ur * U1_1", {"U1_1":-1}, "U1_1 unbinding")
+        
+        s.add_reaction("u1_2_br * Intr2 if Pol_pos > u1_2_bs_pos and U1_2 < 1 else 0",
+                       {"U1_2":1}, "U1_2 binding")
+        s.add_reaction("u1_2_ur * U1_2", {"U1_2":-1}, "U1_2 unbinding")
+        
+        s.add_reaction("u2_1_br * Intr1 if Pol_pos > u2_1_bs_pos and U2_1 < 1 else 0",
+                       {"U2_1":1}, "U2_1 binding")
+        s.add_reaction("u2_1_ur * U2_1", {"U2_1":-1}, "U2_1 unbinding")
+        
+        s.add_reaction("u2_2_br * Intr2 if Pol_pos > u2_2_bs_pos and U2_2 < 1 else 0",
+                       {"U2_2":1}, "U2_2 binding")
+        s.add_reaction("u2_2_ur * U2_2", {"U2_2":-1}, "U2_2 unbinding")
+        
+        #Splicing
+        s.add_reaction("U1_1 * U2_1 * Intr1 * spl_rate",
+                       {"Intr1":-1, "U1_1":-1, "U2_1":-1, "Intr1_ex":1},
+                       name="Intron 1 excision")
+        s.add_reaction("U1_2 * U2_2 * Intr2 * spl_rate",
+                       {"Intr2":-1, "U1_2":-1, "U2_2":-1, "Intr2_ex":1},
+                       name="Intron 2 excision")
+        s.add_reaction("U1_1 * U2_2 * Intr1 * Intr2 * Exon1 * spl_rate",
+                       {"Intr1":-1, "Intr2":-1, "Exon1":-1, "U1_1":-1, "U2_2":-1, "Exon1_ex":1, "Intr1_ex":1, "Intr2_ex":1},
+                       name="Exon 1 excision (inclusion)")
+        
+        #Transcription termination
+        s.add_reaction("tr_term_rate * Exon1_ex * Intr1_ex * Intr2_ex if Tr_dist == 0 else 0",
+                       {"Exon1_ex":-1, "Intr1_ex":-1, "Intr2_ex":-1, "Skip":1,
+                        "Pol_pos": -gene_len, "Pol_on":-1, "Pol_off":1},
+                       name = "Termination: skipping")
+        s.add_reaction("tr_term_rate * Exon1 * Intr1_ex * Intr2_ex if Tr_dist == 0 else 0",
+                       {"Exon1":-1, "Intr1_ex":-1, "Intr2_ex":-1, "Incl":1,
+                        "Pol_pos": -gene_len, "Pol_on":-1, "Pol_off":1},
+                       name = "Termination: inclusion")
+        s.add_reaction("tr_term_rate * Exon1 * Intr1_ex * Intr2 if Tr_dist == 0 else 0",
+                       {"Exon1":-1, "Intr1_ex":-1, "Intr2":-1, "ret_i2":1,
+                        "Pol_pos": -gene_len, "Pol_on":-1, "Pol_off":1},
+                       name = "Termination: Intron 1 retention")
+        s.add_reaction("tr_term_rate * Exon1 * Intr1 * Intr2_ex if Tr_dist == 0 else 0",
+                       {"Exon1":-1, "Intr1":-1, "Intr2_ex":-1, "ret_i1":1,
+                        "Pol_pos": -gene_len, "Pol_on":-1, "Pol_off":1},
+                       name = "Termination: Intron 2 retention")
+        s.add_reaction("tr_term_rate * Exon1 * Intr1 * Intr2 if Tr_dist == 0 else 0",
+                       {"Exon1":-1, "Intr1":-1, "Intr2":-1, "ret":1,
+                        "Pol_pos": -gene_len, "Pol_on":-1, "Pol_off":1},
+                       name = "Termination: full retention")
+        
+        s.add_reaction("d0 * mRNA", {"mRNA": -1})
+        s.add_reaction("s1 * mRNA", {"mRNA": -1, "Incl": 1})
+        s.add_reaction("s2 * mRNA", {"mRNA": -1, "Skip": 1})
+        s.add_reaction("d1 * Incl", {"Incl": -1})
+        s.add_reaction("d2 * Skip", {"Skip": -1})
+        s.add_reaction("s3 * mRNA", {"mRNA": -1, "ret": 1})
+        s.add_reaction("d3 * ret", {"ret": -1})
+        s.add_reaction("d3 * ret_i1", {"ret_i1": -1})
+        s.add_reaction("d3 * ret_i2", {"ret_i2": -1})
+    return s
+
+def heatmap(data, row_labels, col_labels, ax=None,
+            cbar_kw={}, cbarlabel="", **kwargs):
+    """
+    Create a heatmap from a numpy array and two lists of labels.
+
+    Parameters
+    ----------
+    data
+        A 2D numpy array of shape (N, M).
+    row_labels
+        A list or array of length N with the labels for the rows.
+    col_labels
+        A list or array of length M with the labels for the columns.
+    ax
+        A `matplotlib.axes.Axes` instance to which the heatmap is plotted.  If
+        not provided, use current axes or create a new one.  Optional.
+    cbar_kw
+        A dictionary with arguments to `matplotlib.Figure.colorbar`.  Optional.
+    cbarlabel
+        The label for the colorbar.  Optional.
+    **kwargs
+        All other arguments are forwarded to `imshow`.
+    """
+
+    if not ax:
+        fig, ax =  plt.subplots()
+
+    # Plot the heatmap
+    im = ax.imshow(data, **kwargs)
+
+    # Create colorbar
+    cbar = ax.figure.colorbar(im, ax=ax, **cbar_kw)
+    cbar.ax.set_ylabel(cbarlabel, rotation=-90, va="bottom")
+
+    # We want to show all ticks...
+    ax.set_xticks(np.arange(data.shape[1]))
+    ax.set_yticks(np.arange(data.shape[0]))
+    # ... and label them with the respective list entries.
+    ax.set_xticklabels(col_labels, fontsize = 10)
+    ax.set_yticklabels(row_labels, fontsize = 10)
+
+    # Let the horizontal axes labeling appear on top.
+    ax.tick_params(top=True, bottom=False,
+                   labeltop=True, labelbottom=False)
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=-30, ha="right",
+             rotation_mode="anchor")
+
+    # Turn spines off and create white grid.
+    for edge, spine in ax.spines.items():
+        spine.set_visible(False)
+
+    ax.set_xticks(np.arange(data.shape[1]+1)-.5, minor=True)
+    ax.set_yticks(np.arange(data.shape[0]+1)-.5, minor=True)
+    ax.grid(which="minor", color="w", linestyle='-', linewidth=3)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    return im, cbar
+
+
+def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
+                     textcolors=["white", "white"],
+                     threshold=None, **textkw):
+    """
+    A function to annotate a heatmap.
+
+    Parameters
+    ----------
+    im
+        The AxesImage to be labeled.
+    data
+        Data used to annotate.  If None, the image's data is used.  Optional.
+    valfmt
+        The format of the annotations inside the heatmap.  This should either
+        use the string format method, e.g. "$ {x:.2f}", or be a
+        `matplotlib.ticker.Formatter`.  Optional.
+    textcolors
+        A list or array of two color specifications.  The first is used for
+        values below a threshold, the second for those above.  Optional.
+    threshold
+        Value in data units according to which the colors from textcolors are
+        applied.  If None (the default) uses the middle of the colormap as
+        separation.  Optional.
+    **kwargs
+        All other arguments are forwarded to each call to `text` used to create
+        the text labels.
+    """
+
+    if not isinstance(data, (list, np.ndarray)):
+        data = im.get_array()
+
+    # Normalize the threshold to the images color range.
+    if threshold is not None:
+        threshold = im.norm(threshold)
+    else:
+        threshold = im.norm(data.max())/2.
+
+    # Set default alignment to center, but allow it to be
+    # overwritten by textkw.
+    kw = dict(horizontalalignment="center",
+              verticalalignment="center")
+    kw.update(textkw)
+
+    # Get the formatter in case a string is supplied
+    if isinstance(valfmt, str):
+        valfmt = matplotlib.ticker.StrMethodFormatter(valfmt)
+
+    # Loop over the data and create a `Text` for each "pixel".
+    # Change the text's color depending on the data.
+    texts = []
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
+            text = im.axes.text(j, i, valfmt(data[i, j], None), **kw)
+            texts.append(text)
+
+    return texts
+
+            
