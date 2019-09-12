@@ -42,8 +42,11 @@ for v2 in v2s:
     psis.append(s.get_psi_mean())
     ret_total.append(get_total_IR(s))
 
-#s.plot_course(products=["ret_i2","ret_i1","ret"], res = ["stoch"])
-#s.plot_course(products=["Skip","Incl","ret", "mRNA"], res = ["stoch"])
+s.plot_course(products=["ret_i2","ret_i1","ret"], res = ["stoch"])
+s.plot_course(products=["Skip","Incl","ret", "mRNA"], res = ["stoch"])
+s.plot_course(products=["Skip","Incl"], res = ["stoch"])
+s.plot_course(products=["U1_1", "U1_2"], res = ["stoch"])
+s.plot_course(products=["Pol_on", "U1_1"], res = ["stoch"])
 
 fig = plt.figure()
 ax = fig.subplots()
@@ -68,5 +71,5 @@ s.plot_par_var_1d("elong_v", np.linspace(20,200,10),None, s.get_psi_mean)
     
 s = bs.get_exmpl_sim("CoTrSplicing")
 s.set_runtime(40000)
-pars = {"elong_v": np.linspace(20,200,5), "u1_2_br": np.linspace(0.5,4,4)}
-s.plot_par_var_2d(pars, None, s.get_psi_mean)
+pars = {"elong_v": np.linspace(10,200,10), "u1_2_br": np.linspace(0.001,0.01,10)}
+res = s.plot_par_var_2d(pars, None, s.get_psi_mean, ignore_fraction=0.9)

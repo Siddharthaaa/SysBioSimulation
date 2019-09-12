@@ -48,6 +48,9 @@ color_phase_space = 'dimgrey'
 color_initial_state = 'crimson'
 color_steady_state = 'saddlebrown'
 
+class empty(object):
+    def __init__(self):
+        pass
 
 class SimParam(object):
     def __init__(self, name, time=200, discr_points= 1001, params={}, init_state={}):
@@ -69,7 +72,7 @@ class SimParam(object):
         self._is_compiled = self._dynamic_compile
         self._reset_results()
     def _reset_results(self):
-        self.bimodality = {}
+        self.bimodality = {}    
         self.results={}
     def set_raster_count(self, discr_points):
         self.raster_len = discr_points
@@ -83,7 +86,7 @@ class SimParam(object):
         params["id"] = id(self)
         return params
     def param_str(self, sep=", "):
-        s = sep.join([k + "=" + "%2.3f" % v for k,v in self.params.items()])
+        s = sep.join([k + "=" + "%e" % v for k,v in self.params.items()])
         return s
     def set_runtime(self, time):
         self.runtime=time
@@ -515,13 +518,12 @@ class SimParam(object):
            return self.get_result("stoch_rastr")[:, self.get_res_index(name)]
        return self.get_result("ODE")[:, self.get_res_index(name)]
         
-    def get_psi_cv(self):
-        psi = self.results["PSI"][1]
+    def get_psi_cv(self, **kwargs):
+        psi = self.compute_psi(**kwargs)[1]
         sd, mean = np.std(psi), np.mean(psi)
         return sd/mean
-    def get_psi_mean(self):
-        if "PSI" not in self.results:
-            self.compute_psi(ignore_fraction=0)
+    def get_psi_mean(self, **kwargs):
+        self.compute_psi(**kwargs)
         return np.mean(self.results["PSI"][1])
     def get_res_index(self, name):
         return list(self.init_state.keys()).index(name) +1
@@ -586,10 +588,12 @@ class SimParam(object):
         return self.bimodality[settings]
     
     #aux for plotting
-    def _get_indices_and_colors(self, products=[]):
+    def _get_indices_and_colors(self, products=[], cmap="prism"):
         indices = []
         if not hasattr(self, "colors"):
-            self.colors = cm.rainbow(np.linspace(0, 1, len(self.init_state)+1))
+            cmap = cm.get_cmap(cmap)
+            self.colors = cmap(np.linspace(0, 1, len(self.init_state)+1))
+#            self.colors = cm.rainbow(np.linspace(0, 1, len(self.init_state)+1))
         if isinstance(products, str):
             return [self.get_res_index(products)], colors
         for name in products:
@@ -716,14 +720,18 @@ class SimParam(object):
         names = list(pars.keys())
         
         res = []
+        sim_res =[]
         for par1 in pars[names[0]]:
             r = []
+            sim_r = []
             self.set_param(names[0], par1)
             for par2 in pars[names[1]]:
                 self.set_param(names[1], par2)
                 self.simulate()
+                sim_r.append(self.results["stoch_rastr"])
                 r.append(func(**func_pars))
             res.append(r)
+            sim_res.append(sim_r)
             
         if ax is None:
             fig, ax = plt.subplots()
@@ -732,7 +740,11 @@ class SimParam(object):
         ax.set_xlabel(names[1])
         ax.set_ylabel(names[0])
         
-        return ax
+        results = empty()
+        results.ax = ax
+        results.values = res
+        results.sim_res = sim_res
+        return results
         
         
 def plot_hist(x,title = "Distribution", bins = 15, ax = None, scale=1, exp_maxi=3, max_range=None ):
@@ -880,8 +892,9 @@ def compute_stochastic_evolution(reactions, state, runtime, rate_func, constants
         # time step: Meine Version
         #print(a_0)
         if a_0 == 0:
-            break
-        tt = tt - np.log(1. - rr[0])/a_0
+            tt = time_steps[-1]
+        else:
+            tt = tt - np.log(1. - rr[0])/a_0
         state[0] = tt
         while(tt >= time_steps[i] and i < length):
             STATE[i,:] = state
@@ -1177,38 +1190,47 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         s.add_reaction("k2*Prey*Predator",{"Prey":-1, "Predator":1})
         s.add_reaction("k3*(Predator)",{"Predator":-1})
     elif(name == "CoTrSplicing"):
-            
+        
+        # https://www.ncbi.nlm.nih.gov/pubmed/15217358
         gene_len = 3000
         u1_1_bs_pos = 150
         u2_1_bs_pos = 1500
         u1_2_bs_pos = 1700
         u2_2_bs_pos = 2800
         
+       
+        v0 = 55
+        v1 = 6
+        v2 = 4.5
+        spl_r = 0.031
+        
         # consider https://science.sciencemag.org/content/sci/331/6022/1289/F5.large.jpg?width=800&height=600&carousel=1
         #for Ux binding rates
         params = {"pr_on": 2, "pr_off" : 0.1,
-                "elong_v": 50, # 40-80 nt per second . http://book.bionumbers.org/what-is-faster-transcription-or-translation/
+                "elong_v": v0, # 20-80 nt per second . http://book.bionumbers.org/what-is-faster-transcription-or-translation/
                 "gene_len": gene_len,
-                "spl_rate": 0.0015,
+                "spl_rate": spl_r,#0.002, # 1/k3 = 1/k2 + 1/k1
                 "u1_1_bs_pos": u1_1_bs_pos , # U1 binding site position
                 "u1_2_bs_pos": u1_2_bs_pos ,
-                "u1_1_br": 0.004,  # binding rate of U1
-                "u1_1_ur": 0.001, # unbinding rate of U1
-                "u1_2_br": 0.004,  # binding rate of U1
-                "u1_2_ur": 0.001,  # unbinding rate of U1
+                "u1_1_br": v1,  # binding rate of U1
+                "u1_1_ur": 0.0001, # unbinding rate of U1
+                "u1_2_br": v2,  # binding rate of U1
+                "u1_2_ur": 0.0001,  # unbinding rate of U1
                 "u2_1_bs_pos": u2_1_bs_pos, # U2 bind. site pos 1
                 "u2_2_bs_pos": u2_2_bs_pos,
-                "u2_1_br": 0.008,
-                "u2_2_br": 0.008,
-                "u2_1_ur": 0.001,
-                "u2_2_ur": 0.001,
-                "tr_term_rate": 1000,
+                "u2_1_br": v1,
+                "u2_2_br": v2,
+                "u2_1_ur": 0.0001,
+                "u2_2_ur": 0.0001,
+                "tr_term_rate": 100,
+                "Ux_clear_rate": 1e5,
                 "s1":1, "s2":1, "s3": 0.1,
-                "d0":0.01, "d1": 0.01, "d2":0.01, "d3":0.01
+                # http://book.bionumbers.org/how-fast-do-rnas-and-proteins-degrade/
+                "d0":2e-5, "d1": 2e-5, "d2":2e-5, "d3":1e-3 # mRNA half life: 10-20 h -> lambda: math.log(2)/hl
                 }
         
         
-        s = SimParam("Cotranscriptional splicing", 10000, 100001, params = params,
+        s = SimParam("Cotranscriptional splicing", 10000, 10001, params = params,
                         init_state = {"Pol_on":0, "Pol_off": 1,
                                       "nascRNA_bc": 0,
                                       "Pol_pos": 0,
@@ -1218,7 +1240,7 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                                       "Intr1":0, "Intr2":0, "Exon1":0,
                                       "Intr1_ex":0, "Intr2_ex":0, "Exon1_ex":0})
         
-        s.add_reaction("pr_on * Pol_off", 
+        s.add_reaction("pr_on * Pol_off if U1_1 + U1_2 + U2_1 + U2_2 < 1 else 0", # ugly workaround with Ux
                        {"Pol_on":1, "Pol_off": -1,"Exon1":1, "Intr1":1,"Intr2":1, "Tr_dist": gene_len},
                        name = "Transc. initiation")
         
@@ -1275,7 +1297,12 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                        {"Exon1":-1, "Intr1":-1, "Intr2":-1, "ret":1,
                         "Pol_pos": -gene_len, "Pol_on":-1, "Pol_off":1},
                        name = "Termination: full retention")
-        
+        # Free Ux sites after/befor transcription. Very ugly workaround
+        s.add_reaction("Pol_off * U1_1 * Ux_clear_rate", {"U1_1":-1})
+        s.add_reaction("Pol_off * U1_2 * Ux_clear_rate", {"U1_2":-1})
+        s.add_reaction("Pol_off * U2_1 * Ux_clear_rate", {"U2_1":-1})
+        s.add_reaction("Pol_off * U2_2 * Ux_clear_rate", {"U2_2":-1})
+         
         s.add_reaction("d0 * mRNA", {"mRNA": -1})
         s.add_reaction("s1 * mRNA", {"mRNA": -1, "Incl": 1})
         s.add_reaction("s2 * mRNA", {"mRNA": -1, "Skip": 1})
@@ -1285,6 +1312,25 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         s.add_reaction("d3 * ret", {"ret": -1})
         s.add_reaction("d3 * ret_i1", {"ret_i1": -1})
         s.add_reaction("d3 * ret_i2", {"ret_i2": -1})
+        
+        
+    elif(name == "CoTrSplicing_2"):
+        s = get_exmpl_sim("CoTrSplicing")
+        s.set_param("u2_pol_br", 1) # binding rate of U2 + Pol
+        s.set_param("u2_pol_ur", 0.01)
+        s.set_param("u2pol_br", 1) # binding rate of U2Pol + mRNA
+        s.set_param("u2_pol_opt_d", 20) # optimal distance from Pol2
+        s.set_param("u2_pol_opt_d_r", 5)
+        s.add_reaction("Pol_on * u2_pol_br * (1 - U2_Pol)", {"U2_Pol":1})
+        s.add_reaction("U2_Pol * u2_pol_ur", {"U2_Pol":-1})
+        s.add_reaction("U2_Pol * Intr1 * u2pol_br * 1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_1_bs_pos)) \
+                        if Pol_pos > u2_1_bs_pos and U2_1 < 1 else 0", {"U2_1":1, "U2_Pol":-1})
+        s.add_reaction("U2_Pol * Intr2 * u2pol_br * 1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_2_bs_pos)) \
+                        if Pol_pos > u2_2_bs_pos and U2_2 < 1 else 0", {"U2_2":1, "U2_Pol":-1})
+        s.add_reaction("Pol_off * U2_Pol * Ux_clear_rate", {"U2_Pol":-1})
+        
+#        s.add_reaction()
+        
     return s
 
 def heatmap(data, row_labels, col_labels, ax=None,
