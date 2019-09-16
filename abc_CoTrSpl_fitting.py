@@ -92,7 +92,7 @@ limits = dict(v1=(0, 10),
 bound1 = 0.001
 bound2 = 10
 parameter_priors = pa.Distribution(**{key: pa.RV("beta", 2, 2, a, b - a)
-                                    for key, (a,bmean) in limits.items()})
+                                    for key, (a,b) in limits.items()})
 #parameter_priors = [
 #    pa.Distribution(v1=pa.RV("beta",3 ,3, bound1, bound2 ),
 #                    v2=pa.RV("beta", 3, 3, bound1, bound2))]

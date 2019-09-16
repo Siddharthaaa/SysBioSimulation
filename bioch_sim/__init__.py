@@ -8,6 +8,7 @@ Created on Tue Mar 26 08:45:28 2019
 from tkinter import Tk # copy to clipboard function
 from tkinter import filedialog
 import tkinter as tk
+from tkinter.colorchooser import askcolor
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import types
@@ -35,7 +36,7 @@ from sklearn.cluster import KMeans, MeanShift, k_means
 from numba import cuda
 from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32, xoroshiro128p_uniform_float64
 
-drawPetriNets = True
+drawPetriNets = False
 if(drawPetriNets):
     import snakes
     import snakes.plugins
@@ -177,7 +178,7 @@ class SimParam(object):
     
     def show_interface(self):
         root = Tk()
-        root.geometry("600x400+300+300")
+        root.geometry("1000x600+300+300")
         app = SimInterface(self)
         root.mainloop()
         
@@ -592,6 +593,33 @@ class SimParam(object):
        if method == "stoch":
            return self.get_result("stoch_rastr")[:, self.get_res_index(name)]
        return self.get_result("ODE")[:, self.get_res_index(name)]
+   
+    def get_res_from_expr(self, expr):
+#        for k,v  in self.init_state.items():
+#            expr = re.sub("\\b" + k + "\\b", "self.get_res_col(\"%s\")" % k, expr)
+#        
+#        for k,v  in self.params.items():
+#            expr = re.sub("\\b" + k + "\\b", "%e" % v, expr)
+#        print("try to eval: " + expr)
+#        res = eval(expr)
+#        
+        args = []
+        arg_vals = []
+        for k,v  in self.init_state.items():
+            if(re.search("\\b" + k + "\\b", expr) is not None):
+                args.append(k)
+                arg_vals.append(self.get_res_col(k))
+#        print(args)
+        for k,v  in self.params.items():
+            expr = re.sub("\\b" + k + "\\b", "%e" % v, expr)                
+        expr = "self._f = lambda " + ", ".join(args) + ": ("   + expr +")"
+        print(expr)
+        exec(expr)
+#        f = eval(expr)
+        f = np.vectorize(self._f)
+        res = f(*arg_vals)
+        
+        return res
         
     def get_psi_cv(self, **kwargs):
         psi = self.compute_psi(**kwargs)[1]
@@ -680,6 +708,10 @@ class SimParam(object):
         if not hasattr(self, "colors"):
             self._get_indices_and_colors()
         return self.colors[self.get_res_index(name)-1]
+    def _set_color(self, name, c):
+        i = self.get_res_index(name) -1
+        self.colors[i] = colors.to_rgba_array(c)
+        
         
     def plot(self, ax = None, res=["ODE","stoch"] , psi_hist = False, 
              scale = 1, products = [], line_width =1):
@@ -850,6 +882,10 @@ class SimInterface(tk.Frame):
         
         f_params = tk.Frame(self)
         f_params.pack(side=tk.RIGHT, fill = tk.X, expand=True)
+        def key_pressed(e):
+            print("key pressed: ", e.char)
+            if(e.char == "\n"): self.update(True)
+        f_params.bind('<Return>', lambda e: enter_pressed(e) ) 
         
         self._show_sp = []
         i = 0
@@ -863,14 +899,17 @@ class SimInterface(tk.Frame):
             entr = tk.Entry(f_params)
             entr.insert(0,v)
             entr.grid(row=i, column=1)
+            entr.bind('<Return>', lambda e: self.update(True) ) 
             self.p_entries[k]= entr
             i +=1
         self._spezies_checkb = {}
+        self._spezies_col_b = {}
         i = 0
         for k, v in sim.init_state.items():
             c = sim._get_color(k)
             checked = tk.IntVar()
-            check_box = tk.Checkbutton(f_places, text=k, variable = checked, command=self.update)
+            check_box = tk.Checkbutton(f_places, text=k, variable = checked, #command = self.update)
+                                       command= lambda : self.update(False))
 #            check_box.select()
             check_box.grid(row=i, column=0)
             self._spezies_checkb[k] = checked
@@ -878,8 +917,10 @@ class SimInterface(tk.Frame):
             entr.insert(0,v)
             entr.grid(row=i, column=1)
             self.p_entries[k]= entr
-            b_col = tk.Button(f_places, height =1, width=2, bg = colors.to_hex(c) )
+            b_col = tk.Button(f_places, height =1, width=2, bg = colors.to_hex(c),
+                              command = lambda key=k: self._new_color(key))
             b_col.grid(row=i, column=3)
+            self._spezies_col_b[k] = b_col
             
             i +=1
         
@@ -893,21 +934,31 @@ class SimInterface(tk.Frame):
         
         f_control = tk.Frame(self)
         f_control.pack(side =tk.BOTTOM, fill =tk.X)
-        b_update = tk.Button(f_control, text="Update", command = self.update)
+        b_update = tk.Button(f_control, text="Update",
+                             command = lambda: self.update(True))
         b_update.pack(side=tk.RIGHT)
+    
+    def _new_color(self, name):
+        b_c = self._spezies_col_b[name]
+        col_new = askcolor(b_c.cget("bg"))[1]
+        if col_new is not None:
+            b_c.configure(bg=col_new)
+            self.sim._set_color(name, col_new)
+        self.update(False)
     
     def _plot_sim(self):
         ax = self._ax
         ax.clear()
+        print(self._show_sp)
         self.sim.plot_course(ax = ax, products = self._show_sp)
         ax.legend([])
         ax.set_ylabel("#", rotation = 0)
         self._canvas.draw()
     
-    def update(self, sim=True):
+    def update(self, sim=False):
         self.fetch_places()
-        self.fetch_pars()
         if(sim):
+            self.fetch_pars()
             self.sim.simulate()
         print("update..")
         self._plot_sim()
@@ -1366,7 +1417,7 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         s.add_reaction("s3*pre_RNA", {"pre_RNA":-1, "ret":1}, "Retention" )
         s.add_reaction("d3*ret",  {"ret": -1}, "Ret. degr." )
     elif(name == "LotkaVolterra"):
-        s = SimParam("Lotka Voltera", 50, 301,
+        s = SimParam("Lotka Volterra", 50, 301,
                       {"k1":1, "k2":0.007, "k3":0.6 },
                       {"Prey":50, "Predator":200})
         s.add_reaction("k1*Prey", {"Prey":[-2,3]}, "Reproduction")
@@ -1382,10 +1433,15 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         u2_2_bs_pos = 2800
         
        
-        v0 = 55
+        v0 = 60
         v1 = 0.2
         v2 = 0.2
         spl_r = 0.5
+        
+        v1_1 = 0.1
+        v2_1 = 0.2
+        v1_2 = 0.2
+        v2_2 = 1
         
         # consider https://science.sciencemag.org/content/sci/331/6022/1289/F5.large.jpg?width=800&height=600&carousel=1
         #for Ux binding rates
@@ -1395,21 +1451,21 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                 "spl_rate": spl_r,#0.002, # 1/k3 = 1/k2 + 1/k1
                 "u1_1_bs_pos": u1_1_bs_pos , # U1 binding site position
                 "u1_2_bs_pos": u1_2_bs_pos ,
-                "u1_1_br": v1,  # binding rate of U1
-                "u1_1_ur": 0.001, # unbinding rate of U1
-                "u1_2_br": v2,  # binding rate of U1
-                "u1_2_ur": 0.001,  # unbinding rate of U1
+                "u1_1_br": v1_1,  # binding rate of U1
+                "u1_1_ur": 0.01, # unbinding rate of U1
+                "u1_2_br": v1_2,  # binding rate of U1
+                "u1_2_ur": 0.01,  # unbinding rate of U1
                 "u2_1_bs_pos": u2_1_bs_pos, # U2 bind. site pos 1
                 "u2_2_bs_pos": u2_2_bs_pos,
-                "u2_1_br": v1,
-                "u2_2_br": v2,
-                "u2_1_ur": 0.001,
-                "u2_2_ur": 0.001,
+                "u2_1_br": v2_1,
+                "u2_2_br": v2_2,
+                "u2_1_ur": 0.01,
+                "u2_2_ur": 0.01,
                 "tr_term_rate": 100,
                 "Ux_clear_rate": 1e9,
                 "s1":1, "s2":1, "s3": 0.1,
                 # http://book.bionumbers.org/how-fast-do-rnas-and-proteins-degrade/
-                "d0":2e-5, "d1": 2e-5, "d2":2e-5, "d3":1e-3 # mRNA half life: 10-20 h -> lambda: math.log(2)/hl
+                "d0":2e-4, "d1": 2e-4, "d2":2e-4, "d3":1e-5 # mRNA half life: 10-20 h -> lambda: math.log(2)/hl
                 }
         
         
@@ -1440,7 +1496,7 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                        {"U1_2":1}, "U1_2 binding")
         s.add_reaction("u1_2_ur * U1_2", {"U1_2":-1}, "U1_2 diss.")
         
-        s.add_reaction("u2_1_br * Intr1 if Pol_pos > u2_1_bs_pos and U2_1 < 1 else 0",
+        s.add_reaction("u1_2_br * Intr1 if Pol_pos > u2_1_bs_pos and U2_1 < 1 else 0",
                        {"U2_1":1}, "U2_1 binding")
         s.add_reaction("u2_1_ur * U2_1", {"U2_1":-1}, "U2_1 diss.")
         
@@ -1506,9 +1562,9 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         s.set_param("u2_pol_opt_d_r", 5)
         s.add_reaction("Pol_on * u2_pol_br * (1 - U2_Pol)", {"U2_Pol":1}, "Pol + U2")
         s.add_reaction("U2_Pol * u2_pol_ur", {"U2_Pol":-1}, "Pol/U2 diss.")
-        s.add_reaction("U2_Pol * Intr1 * u2pol_br * 1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_1_bs_pos)) \
+        s.add_reaction("(U2_Pol * Intr1 * u2pol_br * (1-1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_1_bs_pos))**2)) \
                         if Pol_pos > u2_1_bs_pos and U2_1 < 1 else 0", {"U2_1":1, "U2_Pol":-1}, "U2onPol to nascRNA")
-        s.add_reaction("U2_Pol * Intr2 * u2pol_br * 1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_2_bs_pos)) \
+        s.add_reaction("U2_Pol * Intr2 * u2pol_br * (1-1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_2_bs_pos))**2) \
                         if Pol_pos > u2_2_bs_pos and U2_2 < 1 else 0", {"U2_2":1, "U2_Pol":-1}, "U2onPol to nascRNA")
         s.add_reaction("Pol_off * U2_Pol * Ux_clear_rate", {"U2_Pol":-1}, "Clearing...")
         
