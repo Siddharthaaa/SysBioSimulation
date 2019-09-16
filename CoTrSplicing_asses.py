@@ -13,7 +13,7 @@ import numpy as np
 import os
 import tempfile
 import scipy.stats as st
-import pyabc as pa
+#import pyabc as pa
 import pandas as pd
 import support_th as sth
 import bioch_sim as bs
@@ -71,5 +71,5 @@ s.plot_par_var_1d("elong_v", np.linspace(20,200,10),None, s.get_psi_mean)
     
 s = bs.get_exmpl_sim("CoTrSplicing")
 s.set_runtime(40000)
-pars = {"elong_v": np.linspace(10,200,10), "u1_2_br": np.linspace(0.001,0.01,10)}
+pars = {"elong_v": np.linspace(10,90,10), "u2_1_br": np.linspace(0.01,0.02,10)}
 res = s.plot_par_var_2d(pars, None, s.get_psi_mean, ignore_fraction=0.9)

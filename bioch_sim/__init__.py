@@ -7,6 +7,8 @@ Created on Tue Mar 26 08:45:28 2019
 
 from tkinter import Tk # copy to clipboard function
 from tkinter import filedialog
+import tkinter as tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import types
 import pylab as plt
@@ -20,6 +22,7 @@ import math
 from threading import Thread
 from multiprocessing import Process, Manager, Queue
 import matplotlib
+import matplotlib.colors as colors
 import matplotlib.cm as cm
 import matplotlib.mlab as mlab
 from matplotlib import gridspec
@@ -32,30 +35,38 @@ from sklearn.cluster import KMeans, MeanShift, k_means
 from numba import cuda
 from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32, xoroshiro128p_uniform_float64
 
+drawPetriNets = True
+if(drawPetriNets):
+    import snakes
+    import snakes.plugins
+    snakes.plugins.load("gv","snakes.nets","nets")
+    import nets as pns
+
+
 # inline displaying
 #%matplotlib inline
 # settings for plots
-matplotlib.rcParams['axes.labelsize'] = 16
-matplotlib.rcParams['xtick.labelsize'] = 16
-matplotlib.rcParams['ytick.labelsize'] = 16
-matplotlib.rcParams['legend.fontsize'] = 14
-matplotlib.rcParams['font.family'] = ['sans-serif']
-line_width = 2
-color_pre = 'dodgerblue'
-color_Incl = 'darkorange'
-color_Skip = "green"
-color_phase_space = 'dimgrey'
-color_initial_state = 'crimson'
-color_steady_state = 'saddlebrown'
+#matplotlib.rcParams['axes.labelsize'] = 16
+#matplotlib.rcParams['xtick.labelsize'] = 16
+#matplotlib.rcParams['ytick.labelsize'] = 16
+#matplotlib.rcParams['legend.fontsize'] = 14
+#matplotlib.rcParams['font.family'] = ['sans-serif']
+#line_width = 2
+#color_pre = 'dodgerblue'
+#color_Incl = 'darkorange'
+#color_Skip = "green"
+#color_phase_space = 'dimgrey'
+#color_initial_state = 'crimson'
+#color_steady_state = 'saddlebrown'
 
 class empty(object):
     def __init__(self):
         pass
 
 class SimParam(object):
-    def __init__(self, name, time=200, discr_points= 1001, params={}, init_state={}):
+    def __init__(self, name, t=200, discr_points= 1001, params={}, init_state={}):
         self.name = str(name)
-        self.runtime = time
+        self.runtime = t
         self.set_raster_count(discr_points)
         self.params=params
         
@@ -63,6 +74,7 @@ class SimParam(object):
         self.simulate_ODE = False
         self._rate_funcs =[]
         self._reactions =[]
+        self._transitions = []
         self.id=id(self)
         self._is_compiled = False
         self._dynamic_compile = False
@@ -88,22 +100,29 @@ class SimParam(object):
     def param_str(self, sep=", "):
         s = sep.join([k + "=" + "%e" % v for k,v in self.params.items()])
         return s
-    def set_runtime(self, time):
-        self.runtime=time
+    def set_runtime(self, t):
+        self.runtime=t
         self.set_raster_count(self.raster_len)
         
     def set_state(self, state):
         self._state = state
-    def add_reaction(self,rate_func, reaction={}, name = None):
-        if name == None:
-            name = "t%d" % (len(self._reactions) +1)  
+    def add_reaction(self,rate_func, reaction={}, name = ""):
+        name = ("t%d: " % (len(self._reactions) +1)) + name
         self._rate_funcs.append(rate_func)
         self._reactions.append(reaction)
+        #all elements should be lists
+        for k in reaction.keys():
+            if type(reaction[k]) is not list:
+                reaction[k] = [reaction[k]]
+        
+        self._transitions.append(dict(name=name, rate=rate_func,
+                                      actors = reaction))
+        
         for name in reaction.keys():
             if not name in self.init_state.keys():
                 self.init_state[name] = 0
         self._is_compiled = False
-#    @nb.jit  # couse performance drops
+#    @nb.jit  # causes performance drops
     def get_rates(self, state=None):
         """ state must contain time as first element
         """
@@ -120,6 +139,10 @@ class SimParam(object):
         return self.get_reacts(state).transpose().dot(self.get_rates())
     
     def get_latex(self):
+        
+#        s = "expr"
+#        lat = sympy.latex(sympy.sympify(s))
+        
         res = "\\begin{align}\
             H=\\begin{pmatrix}\n"
         for rf in self._rate_funcs:
@@ -151,11 +174,57 @@ class SimParam(object):
         r.update() # now it stays on the clipboard after the window is closed
         r.destroy()
         return res
+    
+    def show_interface(self):
+        root = Tk()
+        root.geometry("600x400+300+300")
+        app = SimInterface(self)
+        root.mainloop()
         
+    
+    def draw_pn(self, filename=None, rates=False, engine="dot", **kwargs):
+        self.compile_system()
+        #https://www.ibisc.univ-evry.fr/~fpommereau/SNAKES/API/plugins/gv.html
+        if filename is None:
+            filename = self.name + ".png"
+            
+        pn = pns.PetriNet(self.name)
+        for p, v in self.init_state.items():
+            pn.add_place(pns.Place(p,v))
+        
+        for tr in self._transitions:
+            if(rates):
+                pn.add_transition(pns.Transition(tr["name"], pns.Expression(tr["rate"])))
+            else:
+                pn.add_transition(pns.Transition(tr["name"]))
+            for p, vs in tr["actors"].items():
+                for v in vs:
+                    if(v > 0):
+                        pn.add_output(p, tr["name"], pns.Value(v))
+                    else:
+                        pn.add_input(p, tr["name"], pns.Value(-v))
+        return pn
+        
+        def draw_place (place, attr) :
+#            print(attr)
+            attr['label'] = place.name
+            attr['color'] = colors.to_hex(self._get_color(place.name))
+        def draw_transition (trans, attr) :
+#            print(attr)
+            if str(trans.guard) == 'True' :
+                attr['label'] = trans.name
+            else :
+                attr['label'] = '%s\n%s' % (trans.name, trans.guard)
+        
+        pn.draw(filename, engine = engine, place_attr=draw_place,
+                trans_attr=draw_transition , **kwargs)
+            
     
     def compile_system(self, dynamic = True):
         #create reaction matrix
         self._reacts = np.zeros(( len(self._reactions), len(self.init_state)), dtype=int )
+        self._pre = self._reacts.copy()
+        self._post = self._reacts.copy()
         self._state = list(self.init_state.values())
         self._state.insert(0,0)
         self._state = np.array(self._state, dtype=np.float64)
@@ -163,8 +232,14 @@ class SimParam(object):
         i=0
         for react in self._reactions:
             for substance in react.keys():
-                self._reacts[i, names.index(substance)] += react[substance]
+                for v in react[substance]:
+                    if v < 0:
+                        self._pre[i, names.index(substance)] += -v
+                    else:
+                        self._post[i, names.index(substance)] += v
+#                self._reacts[i, names.index(substance)] += sum(react[substance])
             i+=1
+        self._reacts = self._post - self._pre
         
         #create rates function
         self._r_s = np.zeros((len(self._rate_funcs),))
@@ -588,7 +663,7 @@ class SimParam(object):
         return self.bimodality[settings]
     
     #aux for plotting
-    def _get_indices_and_colors(self, products=[], cmap="prism"):
+    def _get_indices_and_colors(self, products=[], cmap="gist_ncar"):
         indices = []
         if not hasattr(self, "colors"):
             cmap = cm.get_cmap(cmap)
@@ -600,6 +675,11 @@ class SimParam(object):
             index = self.get_res_index(name)
             indices.append(index)
         return indices, self.colors
+    
+    def _get_color(self, name = None):
+        if not hasattr(self, "colors"):
+            self._get_indices_and_colors()
+        return self.colors[self.get_res_index(name)-1]
         
     def plot(self, ax = None, res=["ODE","stoch"] , psi_hist = False, 
              scale = 1, products = [], line_width =1):
@@ -681,7 +761,7 @@ class SimParam(object):
         ax.legend()
         return ax
     
-    def plot_cuda(self):
+    def plot_cuda(self, **kwargs):
 # plots a 2D grid of simulations
 #        fig = plt.figure()
         x,y = tuple(self.cuda_last_params.shape[:2])
@@ -691,7 +771,7 @@ class SimParam(object):
         for xx in range(x):
             for yy in range(y):
                 self.results["stoch_rastr"]=cuda_res[xx,yy]
-                self.plot_course(ax = ax[xx,yy], res=["stoch"])
+                self.plot_course(ax = ax[xx,yy], res=["stoch"], **kwargs)
                 ax[xx,yy].set_ylabel("")
                 ax[xx,yy].set_xlabel("")
                 ax[xx,yy].set_title("")
@@ -745,7 +825,109 @@ class SimParam(object):
         results.values = res
         results.sim_res = sim_res
         return results
+    
+class SimInterface(tk.Frame):
+    def __init__(self, sim):
+        super().__init__()
+        self.sim = sim
+        self.initUI(sim)
+    
+    def initUI(self, sim):
         
+        self.master.title(sim.name)
+        self.pack(fill=tk.BOTH, expand=True)
+                
+        self.columnconfigure(1, weight=1)
+        self.columnconfigure(3, pad=7)
+        self.rowconfigure(3, weight=1)
+        self.rowconfigure(5, pad=7)
+        
+        f_places = tk.Frame(self)
+        f_places.pack(fill=tk.X, side=tk.LEFT)
+        
+        f_plot = tk.Frame(self)
+        f_plot.pack(fill=tk.X, side=tk.LEFT)
+        
+        f_params = tk.Frame(self)
+        f_params.pack(side=tk.RIGHT, fill = tk.X, expand=True)
+        
+        self._show_sp = []
+        i = 0
+        p_labels = []
+        self.p_entries = {}
+        for k, v in sim.params.items():
+#            row = tk.Frame(f_params)
+#            row.pack(side=tk.TOP, fill=tk.X, padx = 1, pady=1)
+            label = tk.Label(f_params, text=k)
+            label.grid(row=i, column=0)
+            entr = tk.Entry(f_params)
+            entr.insert(0,v)
+            entr.grid(row=i, column=1)
+            self.p_entries[k]= entr
+            i +=1
+        self._spezies_checkb = {}
+        i = 0
+        for k, v in sim.init_state.items():
+            c = sim._get_color(k)
+            checked = tk.IntVar()
+            check_box = tk.Checkbutton(f_places, text=k, variable = checked, command=self.update)
+#            check_box.select()
+            check_box.grid(row=i, column=0)
+            self._spezies_checkb[k] = checked
+            entr = tk.Entry(f_places, width=4)
+            entr.insert(0,v)
+            entr.grid(row=i, column=1)
+            self.p_entries[k]= entr
+            b_col = tk.Button(f_places, height =1, width=2, bg = colors.to_hex(c) )
+            b_col.grid(row=i, column=3)
+            
+            i +=1
+        
+        fig = plt.Figure(figsize=(5,5))
+        ax = fig.add_subplot(111)
+        self._ax = ax
+        canvas = FigureCanvasTkAgg(fig, f_plot)
+        canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+        self._canvas = canvas
+        self._plot_sim()
+        
+        f_control = tk.Frame(self)
+        f_control.pack(side =tk.BOTTOM, fill =tk.X)
+        b_update = tk.Button(f_control, text="Update", command = self.update)
+        b_update.pack(side=tk.RIGHT)
+    
+    def _plot_sim(self):
+        ax = self._ax
+        ax.clear()
+        self.sim.plot_course(ax = ax, products = self._show_sp)
+        ax.legend([])
+        ax.set_ylabel("#", rotation = 0)
+        self._canvas.draw()
+    
+    def update(self, sim=True):
+        self.fetch_places()
+        self.fetch_pars()
+        if(sim):
+            self.sim.simulate()
+        print("update..")
+        self._plot_sim()
+        
+    def fetch_places(self):
+        sim = self.sim
+        self._show_sp = []
+        for k, checked in self._spezies_checkb.items():
+            if checked.get():
+                self._show_sp.append(k)
+        
+    def fetch_pars(self):
+        sim = self.sim
+        for k, e in self.p_entries.items():
+            v = eval(e.get())
+            sim.set_param(k,v)
+        
+            
+        
+
         
 def plot_hist(x,title = "Distribution", bins = 15, ax = None, scale=1, exp_maxi=3, max_range=None ):
     if ax == None:
@@ -1139,14 +1321,14 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         
         s.simulate_ODE = True
         
-        s.add_reaction("v_syn", {"pre_RNA":1} )
-        s.add_reaction("d0*pre_RNA", {"pre_RNA":-1} )
-        s.add_reaction("s1*pre_RNA", {"pre_RNA":-1, "Incl":1})
-        s.add_reaction("d1*Incl", {"Incl": -1}  )
-        s.add_reaction("s2*pre_RNA" ,  {"pre_RNA":-1, "Skip":1})
-        s.add_reaction("d2*Skip", {"Skip":-1}  )
-        s.add_reaction("s3*pre_RNA", {"pre_RNA":-1, "ret":1} )
-        s.add_reaction("d3*ret",  {"ret": -1} )
+        s.add_reaction("v_syn", {"pre_RNA":1}, "Transcription" )
+        s.add_reaction("d0*pre_RNA", {"pre_RNA":-1}, "mRNA degr." )
+        s.add_reaction("s1*pre_RNA", {"pre_RNA":-1, "Incl":1}, "Inclusion")
+        s.add_reaction("d1*Incl", {"Incl": -1} , "Incl. degr." )
+        s.add_reaction("s2*pre_RNA" ,  {"pre_RNA":-1, "Skip":1}, "Skipping")
+        s.add_reaction("d2*Skip", {"Skip":-1}, "Skip. degr."  )
+        s.add_reaction("s3*pre_RNA", {"pre_RNA":-1, "ret":1}, "Retention" )
+        s.add_reaction("d3*ret",  {"ret": -1}, "ret. degr" )
     elif(name == "hill_fb"):
                 
         k_on=0
@@ -1162,8 +1344,8 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         d2=0.100
         d3=0.500
         s1_t=5
-        name="Splicing with a feedback (over hill func)"
-        s = bs.SimParam(name, 200, 1001,
+        name="Hill_Feedback"
+        s = SimParam(name, 400, 1001,
                      params = {"k_on": k_on, "k_off": k_off, "v_syn": v_syn, "s1": s1, "Ka1":Ka1, "n1":n1,
                                "s2": s2, "s3": s3, "d0": d0, "d1": d1, "d2": d2, "d3": d3, "s1_t":s1_t},
                      init_state = {"Pr_on": 1, "Pr_off": 0, "pre_RNA": 0,
@@ -1171,24 +1353,25 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         
         s.simulate_ODE = True
         
-        s.add_reaction("k_on*Pr_off", {"Pr_on":1, "Pr_off":-1})
-        s.add_reaction("k_off*Pr_on", {"Pr_off":1, "Pr_on":-1})
-        s.add_reaction("v_syn*Pr_on", {"pre_RNA":1} )
-        s.add_reaction("d0*pre_RNA", {"pre_RNA":-1} )
-        s.add_reaction("s1*pre_RNA + pre_RNA* s1_t * (1/(1 + (Ka1/Incl)**n1) if Incl > 0 else 0)", {"pre_RNA":-1, "Incl":1})
-        s.add_reaction("d1*Incl", {"Incl": -1}  )
-        s.add_reaction("s2*pre_RNA" ,  {"pre_RNA":-1, "Skip":1})
+        s.add_reaction("k_on*Pr_off", {"Pr_on":1, "Pr_off":-1}, "Prom. act.")
+        s.add_reaction("k_off*Pr_on", {"Pr_off":1, "Pr_on":-1}, "Prom. deact.")
+        s.add_reaction("v_syn*Pr_on", {"pre_RNA":1, "Pr_on":[-1,1]}, "Transcription")
+        s.add_reaction("d0*pre_RNA", {"pre_RNA":-1}, "mRNA degr." )
+        s.add_reaction("s1*pre_RNA + pre_RNA* s1_t * (1/(1 + (Ka1/Incl)**n1) if Incl > 0 else 0)",
+                       {"pre_RNA":-1, "Incl":1}, "Inclusion")
+        s.add_reaction("d1*Incl", {"Incl": -1}, "Incl. degr"  )
+        s.add_reaction("s2*pre_RNA" ,  {"pre_RNA":-1, "Skip":1}, "Skipping")
         #            s.add_reaction("s2*pre_RNA + 5* (Skip > 0)* 1/(1+(Ka2/Skip)**n2)" ,  {"pre_RNA":-1, "Skip":1})
-        s.add_reaction("d2*Skip", {"Skip":-1}  )
-        s.add_reaction("s3*pre_RNA", {"pre_RNA":-1, "ret":1} )
-        s.add_reaction("d3*ret",  {"ret": -1} )
+        s.add_reaction("d2*Skip", {"Skip":-1}, "Skip degr."  )
+        s.add_reaction("s3*pre_RNA", {"pre_RNA":-1, "ret":1}, "Retention" )
+        s.add_reaction("d3*ret",  {"ret": -1}, "Ret. degr." )
     elif(name == "LotkaVolterra"):
         s = SimParam("Lotka Voltera", 50, 301,
                       {"k1":1, "k2":0.007, "k3":0.6 },
                       {"Prey":50, "Predator":200})
-        s.add_reaction("k1*Prey",{"Prey":1})
-        s.add_reaction("k2*Prey*Predator",{"Prey":-1, "Predator":1})
-        s.add_reaction("k3*(Predator)",{"Predator":-1})
+        s.add_reaction("k1*Prey", {"Prey":[-2,3]}, "Reproduction")
+        s.add_reaction("k2*Prey*Predator",{"Prey":-1, "Predator":1}, "Hunt")
+        s.add_reaction("k3*(Predator)",{"Predator":-1}, "Death")
     elif(name == "CoTrSplicing"):
         
         # https://www.ncbi.nlm.nih.gov/pubmed/15217358
@@ -1200,9 +1383,9 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         
        
         v0 = 55
-        v1 = 6
-        v2 = 4.5
-        spl_r = 0.031
+        v1 = 0.2
+        v2 = 0.2
+        spl_r = 0.5
         
         # consider https://science.sciencemag.org/content/sci/331/6022/1289/F5.large.jpg?width=800&height=600&carousel=1
         #for Ux binding rates
@@ -1213,17 +1396,17 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                 "u1_1_bs_pos": u1_1_bs_pos , # U1 binding site position
                 "u1_2_bs_pos": u1_2_bs_pos ,
                 "u1_1_br": v1,  # binding rate of U1
-                "u1_1_ur": 0.0001, # unbinding rate of U1
+                "u1_1_ur": 0.001, # unbinding rate of U1
                 "u1_2_br": v2,  # binding rate of U1
-                "u1_2_ur": 0.0001,  # unbinding rate of U1
+                "u1_2_ur": 0.001,  # unbinding rate of U1
                 "u2_1_bs_pos": u2_1_bs_pos, # U2 bind. site pos 1
                 "u2_2_bs_pos": u2_2_bs_pos,
                 "u2_1_br": v1,
                 "u2_2_br": v2,
-                "u2_1_ur": 0.0001,
-                "u2_2_ur": 0.0001,
+                "u2_1_ur": 0.001,
+                "u2_2_ur": 0.001,
                 "tr_term_rate": 100,
-                "Ux_clear_rate": 1e5,
+                "Ux_clear_rate": 1e9,
                 "s1":1, "s2":1, "s3": 0.1,
                 # http://book.bionumbers.org/how-fast-do-rnas-and-proteins-degrade/
                 "d0":2e-5, "d1": 2e-5, "d2":2e-5, "d3":1e-3 # mRNA half life: 10-20 h -> lambda: math.log(2)/hl
@@ -1245,25 +1428,25 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                        name = "Transc. initiation")
         
         s.add_reaction("elong_v * Pol_on if Pol_pos < gene_len else 0",
-                       {"nascRNA_bc": 0, "Pol_pos":1, "Tr_dist":-1},
+                       {"nascRNA_bc": 1, "Pol_pos":1, "Tr_dist":-1},
                        name = "Elongation")
         
         # Ux (un)binding cinetics
         s.add_reaction("u1_1_br * Intr1 if Pol_pos > u1_1_bs_pos and U1_1 < 1 else 0",
                        {"U1_1":1}, "U1_1 binding")
-        s.add_reaction("u1_1_ur * U1_1", {"U1_1":-1}, "U1_1 unbinding")
+        s.add_reaction("u1_1_ur * U1_1", {"U1_1":-1}, "U1_1 diss.")
         
         s.add_reaction("u1_2_br * Intr2 if Pol_pos > u1_2_bs_pos and U1_2 < 1 else 0",
                        {"U1_2":1}, "U1_2 binding")
-        s.add_reaction("u1_2_ur * U1_2", {"U1_2":-1}, "U1_2 unbinding")
+        s.add_reaction("u1_2_ur * U1_2", {"U1_2":-1}, "U1_2 diss.")
         
         s.add_reaction("u2_1_br * Intr1 if Pol_pos > u2_1_bs_pos and U2_1 < 1 else 0",
                        {"U2_1":1}, "U2_1 binding")
-        s.add_reaction("u2_1_ur * U2_1", {"U2_1":-1}, "U2_1 unbinding")
+        s.add_reaction("u2_1_ur * U2_1", {"U2_1":-1}, "U2_1 diss.")
         
         s.add_reaction("u2_2_br * Intr2 if Pol_pos > u2_2_bs_pos and U2_2 < 1 else 0",
                        {"U2_2":1}, "U2_2 binding")
-        s.add_reaction("u2_2_ur * U2_2", {"U2_2":-1}, "U2_2 unbinding")
+        s.add_reaction("u2_2_ur * U2_2", {"U2_2":-1}, "U2_2 diss.")
         
         #Splicing
         s.add_reaction("U1_1 * U2_1 * Intr1 * spl_rate",
@@ -1298,20 +1481,20 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                         "Pol_pos": -gene_len, "Pol_on":-1, "Pol_off":1},
                        name = "Termination: full retention")
         # Free Ux sites after/befor transcription. Very ugly workaround
-        s.add_reaction("Pol_off * U1_1 * Ux_clear_rate", {"U1_1":-1})
-        s.add_reaction("Pol_off * U1_2 * Ux_clear_rate", {"U1_2":-1})
-        s.add_reaction("Pol_off * U2_1 * Ux_clear_rate", {"U2_1":-1})
-        s.add_reaction("Pol_off * U2_2 * Ux_clear_rate", {"U2_2":-1})
+        s.add_reaction("Pol_off * U1_1 * Ux_clear_rate", {"U1_1":-1}, "Clearing...")
+        s.add_reaction("Pol_off * U1_2 * Ux_clear_rate", {"U1_2":-1}, "Clearing...")
+        s.add_reaction("Pol_off * U2_1 * Ux_clear_rate", {"U2_1":-1}, "Clearing...")
+        s.add_reaction("Pol_off * U2_2 * Ux_clear_rate", {"U2_2":-1}, "Clearing...")
          
-        s.add_reaction("d0 * mRNA", {"mRNA": -1})
-        s.add_reaction("s1 * mRNA", {"mRNA": -1, "Incl": 1})
-        s.add_reaction("s2 * mRNA", {"mRNA": -1, "Skip": 1})
-        s.add_reaction("d1 * Incl", {"Incl": -1})
-        s.add_reaction("d2 * Skip", {"Skip": -1})
-        s.add_reaction("s3 * mRNA", {"mRNA": -1, "ret": 1})
-        s.add_reaction("d3 * ret", {"ret": -1})
-        s.add_reaction("d3 * ret_i1", {"ret_i1": -1})
-        s.add_reaction("d3 * ret_i2", {"ret_i2": -1})
+#        s.add_reaction("d0 * mRNA", {"mRNA": -1})
+        s.add_reaction("s1 * ret", {"ret": -1, "Incl": 1}, "PostTr. Incl")
+        s.add_reaction("s2 * ret", {"ret": -1, "Skip": 1}, "PostTr. Skip")
+        s.add_reaction("d1 * Incl", {"Incl": -1}, "Incl degr.")
+        s.add_reaction("d2 * Skip", {"Skip": -1}), "Skip degr."
+#        s.add_reaction("s3 * mRNA", {"mRNA": -1, "ret": 1})
+        s.add_reaction("d3 * ret", {"ret": -1}, "ret degr.")
+        s.add_reaction("d3 * ret_i1", {"ret_i1": -1}, "ret_i1 degr.")
+        s.add_reaction("d3 * ret_i2", {"ret_i2": -1}, "ret_i2 degr")
         
         
     elif(name == "CoTrSplicing_2"):
@@ -1321,13 +1504,13 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         s.set_param("u2pol_br", 1) # binding rate of U2Pol + mRNA
         s.set_param("u2_pol_opt_d", 20) # optimal distance from Pol2
         s.set_param("u2_pol_opt_d_r", 5)
-        s.add_reaction("Pol_on * u2_pol_br * (1 - U2_Pol)", {"U2_Pol":1})
-        s.add_reaction("U2_Pol * u2_pol_ur", {"U2_Pol":-1})
+        s.add_reaction("Pol_on * u2_pol_br * (1 - U2_Pol)", {"U2_Pol":1}, "Pol + U2")
+        s.add_reaction("U2_Pol * u2_pol_ur", {"U2_Pol":-1}, "Pol/U2 diss.")
         s.add_reaction("U2_Pol * Intr1 * u2pol_br * 1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_1_bs_pos)) \
-                        if Pol_pos > u2_1_bs_pos and U2_1 < 1 else 0", {"U2_1":1, "U2_Pol":-1})
+                        if Pol_pos > u2_1_bs_pos and U2_1 < 1 else 0", {"U2_1":1, "U2_Pol":-1}, "U2onPol to nascRNA")
         s.add_reaction("U2_Pol * Intr2 * u2pol_br * 1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_2_bs_pos)) \
-                        if Pol_pos > u2_2_bs_pos and U2_2 < 1 else 0", {"U2_2":1, "U2_Pol":-1})
-        s.add_reaction("Pol_off * U2_Pol * Ux_clear_rate", {"U2_Pol":-1})
+                        if Pol_pos > u2_2_bs_pos and U2_2 < 1 else 0", {"U2_2":1, "U2_Pol":-1}, "U2onPol to nascRNA")
+        s.add_reaction("Pol_off * U2_Pol * Ux_clear_rate", {"U2_Pol":-1}, "Clearing...")
         
 #        s.add_reaction()
         
