@@ -71,5 +71,40 @@ s.plot_par_var_1d("elong_v", np.linspace(20,200,10),None, s.get_psi_mean)
     
 s = bs.get_exmpl_sim("CoTrSplicing")
 s.set_runtime(40000)
-pars = {"elong_v": np.linspace(10,90,10), "u2_1_br": np.linspace(0.01,0.02,10)}
-res = s.plot_par_var_2d(pars, None, s.get_psi_mean, ignore_fraction=0.9)
+pars = {"elong_v": np.linspace(10,500,50), "u1_2_br": np.linspace(0.01,0.4,40)}
+res = s.plot_par_var_2d(pars, None, s.get_psi_mean, ignore_fraction=0.8)
+
+
+s = bs.get_exmpl_sim("CoTrSplicing")
+s.set_runtime(80000)
+psis = []
+res = []
+ret = []
+reti1 = []
+reti2 = []
+for v2  in np.linspace(0.001, 0.12, 201):
+    s.set_param("u1_2_br", v2)
+    s.set_param("u2_1_br", v2)
+    s.simulate()
+    psis.append(s.get_psi_mean())
+    reti1.append(s.get_res_col("ret_i1"))
+    reti2.append(s.get_res_col("ret_i2"))
+    ret.append(s.get_res_col("ret"))
+    
+    res.append(s.get_res_from_expr("ret + ret_i1 + ret_i2"))
+
+res = [np.mean(r[-2000:]) for r in res]
+ret = [np.mean(r[-2000:]) for r in ret]
+reti1 = [np.mean(r[-2000:]) for r in reti1]
+reti2 = [np.mean(r[-2000:]) for r in reti2]
+
+fig = plt.figure()
+ax = fig.subplots()
+ax.scatter(psis, res, label ="sum")
+ax.scatter(psis, ret, label ="ret")
+ax.scatter(psis, reti1, label ="ret_i1")
+ax.scatter(psis, reti2, label ="ret_i2")
+
+ax.set_xlabel("PSI")
+ax.set_ylabel("#")
+ax.set_title("By variation of v2")

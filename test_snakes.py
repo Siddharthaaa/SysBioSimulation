@@ -33,6 +33,11 @@ for engine in ('neato', 'dot', 'circo', 'twopi', 'fdp', "sfdp" ) :
     
 s = bs.get_exmpl_sim("hill_fb")
 s = bs.get_exmpl_sim("LotkaVolterra")
-s = bs.get_exmpl_sim("CoTrSplicing_2")
+s = bs.get_exmpl_sim("CoTrSplicing")
+for sp in ["Incl", "Skip", "ret" ]:
+    s._clusters[sp] = (1,)
+for sp in ["U1_1", "U1_2", "U2_1", "U2_2" ]:
+    s._clusters[sp] = (0,)
+
 s = bs.get_exmpl_sim()
 s.draw_pn(rates=False, engine="dot")

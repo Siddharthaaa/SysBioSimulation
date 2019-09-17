@@ -36,11 +36,12 @@ from sklearn.cluster import KMeans, MeanShift, k_means
 from numba import cuda
 from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32, xoroshiro128p_uniform_float64
 
-drawPetriNets = False
+drawPetriNets = True
 if(drawPetriNets):
     import snakes
     import snakes.plugins
     snakes.plugins.load("gv","snakes.nets","nets")
+#    snakes.plugins.load('clusters', 'nets', 'snk')
     import nets as pns
 
 
@@ -79,6 +80,7 @@ class SimParam(object):
         self.id=id(self)
         self._is_compiled = False
         self._dynamic_compile = False
+        self._clusters ={}
         self._reset_results()
     def set_param(self, name, value):
         self.params[name] = value
@@ -191,20 +193,24 @@ class SimParam(object):
             
         pn = pns.PetriNet(self.name)
         for p, v in self.init_state.items():
-            pn.add_place(pns.Place(p,v))
+            cluster = self._clusters[p] if p in self._clusters else ()
+            pn.add_place(pns.Place(p,v), cluster=cluster)
         
         for tr in self._transitions:
+            name = tr["name"]
+            cluster = self._clusters[name] if name in self._clusters else ()
             if(rates):
-                pn.add_transition(pns.Transition(tr["name"], pns.Expression(tr["rate"])))
+                pn.add_transition(pns.Transition(name, pns.Expression(tr["rate"])),
+                                                 cluster = cluster)
             else:
-                pn.add_transition(pns.Transition(tr["name"]))
+                pn.add_transition(pns.Transition(name), cluster=cluster)
             for p, vs in tr["actors"].items():
                 for v in vs:
                     if(v > 0):
-                        pn.add_output(p, tr["name"], pns.Value(v))
+                        pn.add_output(p, name, pns.Value(v))
                     else:
-                        pn.add_input(p, tr["name"], pns.Value(-v))
-        return pn
+                        pn.add_input(p, name, pns.Value(-v))
+        
         
         def draw_place (place, attr) :
 #            print(attr)
@@ -219,7 +225,7 @@ class SimParam(object):
         
         pn.draw(filename, engine = engine, place_attr=draw_place,
                 trans_attr=draw_transition , **kwargs)
-            
+        return pn
     
     def compile_system(self, dynamic = True):
         #create reaction matrix
@@ -612,11 +618,9 @@ class SimParam(object):
 #        print(args)
         for k,v  in self.params.items():
             expr = re.sub("\\b" + k + "\\b", "%e" % v, expr)                
-        expr = "self._f = lambda " + ", ".join(args) + ": ("   + expr +")"
-        print(expr)
-        exec(expr)
-#        f = eval(expr)
-        f = np.vectorize(self._f)
+        expr = "lambda " + ", ".join(args) + ": ("   + expr +")"
+        f = eval(expr)
+        f = np.vectorize(f, otypes=[np.float] )
         res = f(*arg_vals)
         
         return res
@@ -1463,9 +1467,9 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                 "u2_2_ur": 0.01,
                 "tr_term_rate": 100,
                 "Ux_clear_rate": 1e9,
-                "s1":1, "s2":1, "s3": 0.1,
+                "s1":2e-2, "s2":1e-2, "s3": 1e-3,
                 # http://book.bionumbers.org/how-fast-do-rnas-and-proteins-degrade/
-                "d0":2e-4, "d1": 2e-4, "d2":2e-4, "d3":1e-5 # mRNA half life: 10-20 h -> lambda: math.log(2)/hl
+                "d0":2e-4, "d1": 2e-4, "d2":2e-4, "d3":1e-3 # mRNA half life: 10-20 h -> lambda: math.log(2)/hl
                 }
         
         
