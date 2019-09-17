@@ -137,10 +137,10 @@ class SimParam(object):
         if state is None:
             state = self._state
         return self._reacts
-    
     def get_derivation(self, state = None):
         return self.get_reacts(state).transpose().dot(self.get_rates())
-    
+    def set_cluster(self, name, c = ()):
+        self._clusters[name]= c
     def get_latex(self):
         
 #        s = "expr"
@@ -181,11 +181,16 @@ class SimParam(object):
     def show_interface(self):
         root = Tk()
         root.geometry("1000x600+300+300")
+        if "stoch_rastr" not in self.results:
+            self.simulate()
         app = SimInterface(self)
         root.mainloop()
         
     
-    def draw_pn(self, filename=None, rates=False, engine="dot", **kwargs):
+    def draw_pn(self, filename=None, rates=False, rotation = False,
+                engine=('neato', 'dot', 'circo', 'twopi', 'fdp'), **kwargs):
+        if type(engine) is str:
+            engine = (engine,)
         self.compile_system()
         #https://www.ibisc.univ-evry.fr/~fpommereau/SNAKES/API/plugins/gv.html
         if filename is None:
@@ -222,8 +227,11 @@ class SimParam(object):
                 attr['label'] = trans.name
             else :
                 attr['label'] = '%s\n%s' % (trans.name, trans.guard)
-        
-        pn.draw(filename, engine = engine, place_attr=draw_place,
+        if(rotation):
+            pn.transpose()
+        for e in engine:
+            f_name = re.sub("(\.\w+)$", "_"+ e + "\\1", filename)
+            pn.draw(f_name, engine = e, place_attr=draw_place,
                 trans_attr=draw_transition , **kwargs)
         return pn
     
@@ -882,14 +890,20 @@ class SimInterface(tk.Frame):
         f_places.pack(fill=tk.X, side=tk.LEFT)
         
         f_plot = tk.Frame(self)
-        f_plot.pack(fill=tk.X, side=tk.LEFT)
+        f_plot.pack(fill=tk.BOTH, side=tk.LEFT, expand=True)
         
-        f_params = tk.Frame(self)
-        f_params.pack(side=tk.RIGHT, fill = tk.X, expand=True)
-        def key_pressed(e):
-            print("key pressed: ", e.char)
-            if(e.char == "\n"): self.update(True)
-        f_params.bind('<Return>', lambda e: enter_pressed(e) ) 
+        f_params_container = tk.Canvas(self)
+        
+        f_params = tk.Frame(f_params_container)
+        f_params.pack(side=tk.BOTTOM, fill = tk.X, expand=True)
+        par_sbar = tk.Scrollbar(f_params_container, orient="vertical", command=f_params_container.yview )
+        par_sbar.pack(side=tk.RIGHT, fill=tk.Y)
+        f_params_container.configure(yscrollcommand=par_sbar.set)
+        f_params_container.pack(side = tk.TOP, fill = tk.BOTH, expand = True)
+#        def key_pressed(e):
+#            print("key pressed: ", e.char)
+#            if(e.char == "\n"): self.update(True)
+#        f_params.bind('<Return>', lambda e: key_pressed(e) ) 
         
         self._show_sp = []
         i = 0
@@ -921,7 +935,7 @@ class SimInterface(tk.Frame):
             entr.insert(0,v)
             entr.grid(row=i, column=1)
             self.p_entries[k]= entr
-            b_col = tk.Button(f_places, height =1, width=2, bg = colors.to_hex(c),
+            b_col = tk.Button(f_places, height =1, width=1, bg = colors.to_hex(c),
                               command = lambda key=k: self._new_color(key))
             b_col.grid(row=i, column=3)
             self._spezies_col_b[k] = b_col
@@ -1446,6 +1460,8 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         v2_1 = 0.2
         v1_2 = 0.2
         v2_2 = 1
+        s2 = 1/(3/(v1_1+v2_2)  + 1/(spl_r))
+        s1 = 1/(3/(v1_1+v2_1)  + 3/(v1_2+v2_2) + 2/(spl_r))
         
         # consider https://science.sciencemag.org/content/sci/331/6022/1289/F5.large.jpg?width=800&height=600&carousel=1
         #for Ux binding rates
@@ -1456,18 +1472,18 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                 "u1_1_bs_pos": u1_1_bs_pos , # U1 binding site position
                 "u1_2_bs_pos": u1_2_bs_pos ,
                 "u1_1_br": v1_1,  # binding rate of U1
-                "u1_1_ur": 0.01, # unbinding rate of U1
+                "u1_1_ur": 0.001, # unbinding rate of U1
                 "u1_2_br": v1_2,  # binding rate of U1
-                "u1_2_ur": 0.01,  # unbinding rate of U1
+                "u1_2_ur": 0.001,  # unbinding rate of U1
                 "u2_1_bs_pos": u2_1_bs_pos, # U2 bind. site pos 1
                 "u2_2_bs_pos": u2_2_bs_pos,
                 "u2_1_br": v2_1,
                 "u2_2_br": v2_2,
-                "u2_1_ur": 0.01,
-                "u2_2_ur": 0.01,
+                "u2_1_ur": 0.001,
+                "u2_2_ur": 0.001,
                 "tr_term_rate": 100,
                 "Ux_clear_rate": 1e9,
-                "s1":2e-2, "s2":1e-2, "s3": 1e-3,
+#                "s1":s1, "s2":s2, "s3": 1e-4,
                 # http://book.bionumbers.org/how-fast-do-rnas-and-proteins-degrade/
                 "d0":2e-4, "d1": 2e-4, "d2":2e-4, "d3":1e-3 # mRNA half life: 10-20 h -> lambda: math.log(2)/hl
                 }
@@ -1482,6 +1498,14 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                                       "U2_1":0, "U2_2":0,
                                       "Intr1":0, "Intr2":0, "Exon1":0,
                                       "Intr1_ex":0, "Intr2_ex":0, "Exon1_ex":0})
+        # for drawing PN with SNAKES
+        [s.set_cluster(sp,(0,)) for sp in ["Incl", "Skip"]]
+        [s.set_cluster(sp,(1,)) for sp in ["ret", "ret_i1", "ret_i2"]]
+        [s.set_cluster(sp,(2,)) for sp in ["Intr1", "Intr2", "Exon1"]]
+        [s.set_cluster(sp,(3,)) for sp in ["Intr1_ex", "Intr2_ex", "Exon1_ex"]]
+        [s.set_cluster(sp,(4,)) for sp in ["Pol_on", "Pol_off", "Pol_pos"]]
+        [s.set_cluster(sp,(5,)) for sp in ["U1_1", "U1_2", "U2_1", "U2_2"]]
+        ###########################
         
         s.add_reaction("pr_on * Pol_off if U1_1 + U1_2 + U2_1 + U2_2 < 1 else 0", # ugly workaround with Ux
                        {"Pol_on":1, "Pol_off": -1,"Exon1":1, "Intr1":1,"Intr2":1, "Tr_dist": gene_len},
@@ -1500,7 +1524,7 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                        {"U1_2":1}, "U1_2 binding")
         s.add_reaction("u1_2_ur * U1_2", {"U1_2":-1}, "U1_2 diss.")
         
-        s.add_reaction("u1_2_br * Intr1 if Pol_pos > u2_1_bs_pos and U2_1 < 1 else 0",
+        s.add_reaction("u2_1_br * Intr1 if Pol_pos > u2_1_bs_pos and U2_1 < 1 else 0",
                        {"U2_1":1}, "U2_1 binding")
         s.add_reaction("u2_1_ur * U2_1", {"U2_1":-1}, "U2_1 diss.")
         
@@ -1547,10 +1571,10 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         s.add_reaction("Pol_off * U2_2 * Ux_clear_rate", {"U2_2":-1}, "Clearing...")
          
 #        s.add_reaction("d0 * mRNA", {"mRNA": -1})
-        s.add_reaction("s1 * ret", {"ret": -1, "Incl": 1}, "PostTr. Incl")
-        s.add_reaction("s2 * ret", {"ret": -1, "Skip": 1}, "PostTr. Skip")
+        s.add_reaction("1/(3/(u1_1_br+u2_1_br)  + 3/(u1_2_br+u2_2_br) + 2/(spl_rate)) * ret", {"ret": -1, "Incl": 1}, "PostTr. Incl")
+        s.add_reaction("1/(3/(u1_1_br+u2_2_br)  + 1/(spl_rate)) * ret", {"ret": -1, "Skip": 1}, "PostTr. Skip")
         s.add_reaction("d1 * Incl", {"Incl": -1}, "Incl degr.")
-        s.add_reaction("d2 * Skip", {"Skip": -1}), "Skip degr."
+        s.add_reaction("d2 * Skip", {"Skip": -1}, "Skip degr.")
 #        s.add_reaction("s3 * mRNA", {"mRNA": -1, "ret": 1})
         s.add_reaction("d3 * ret", {"ret": -1}, "ret degr.")
         s.add_reaction("d3 * ret_i1", {"ret_i1": -1}, "ret_i1 degr.")

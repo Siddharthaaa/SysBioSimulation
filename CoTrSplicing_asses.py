@@ -30,7 +30,9 @@ def get_total_IR(s):
     return np.mean(ir[int(len(ir)/10):])
     
 s = bs.get_exmpl_sim("CoTrSplicing")
-s.set_runtime(50000)
+#s.draw_pn(rates=False)
+s.set_runtime(500)
+s.show_interface()
 s.compile_system()
 v2s = np.linspace(0.1, 5, 40)
 psis = []
@@ -76,35 +78,115 @@ res = s.plot_par_var_2d(pars, None, s.get_psi_mean, ignore_fraction=0.8)
 
 
 s = bs.get_exmpl_sim("CoTrSplicing")
-s.set_runtime(80000)
+s.set_runtime(60000)
+s.set_param("elong_v", 50)
+psi_means =[]
 psis = []
 res = []
 ret = []
 reti1 = []
 reti2 = []
-for v2  in np.linspace(0.001, 0.12, 201):
+incl =[]
+skip = []
+v2s = np.linspace(0.001, 0.12, 201)
+
+for v2  in v2s:
     s.set_param("u1_2_br", v2)
     s.set_param("u2_1_br", v2)
     s.simulate()
-    psis.append(s.get_psi_mean())
+    psi_means.append(s.get_psi_mean())
+    psis.append(s.compute_psi()[1])
+    
     reti1.append(s.get_res_col("ret_i1"))
     reti2.append(s.get_res_col("ret_i2"))
     ret.append(s.get_res_col("ret"))
+    incl.append(s.get_res_col("Incl"))
+    skip.append(s.get_res_col("Skip"))
     
     res.append(s.get_res_from_expr("ret + ret_i1 + ret_i2"))
 
-res = [np.mean(r[-2000:]) for r in res]
-ret = [np.mean(r[-2000:]) for r in ret]
-reti1 = [np.mean(r[-2000:]) for r in reti1]
-reti2 = [np.mean(r[-2000:]) for r in reti2]
+res_means = [np.mean(r[-3000:]) for r in res]
+res_stds = [np.std(r[-3000:]) for r in res]
+ret_means = [np.mean(r[-3000:]) for r in ret]
+reti1_means = [np.mean(r[-3000:]) for r in reti1]
+reti2_means = [np.mean(r[-3000:]) for r in reti2]
+psi_stds = [np.std(r) for r in psis]
+
+incl_means = [np.mean(r[-3000:]) for r in incl]
+incl_stds = [np.std(r[-3000:]) for r in incl]
+skip_means = [np.mean(r[-3000:]) for r in skip]
+skip_stds = [np.std(r[-3000:]) for r in skip]
+
 
 fig = plt.figure()
 ax = fig.subplots()
-ax.scatter(psis, res, label ="sum")
-ax.scatter(psis, ret, label ="ret")
-ax.scatter(psis, reti1, label ="ret_i1")
-ax.scatter(psis, reti2, label ="ret_i2")
+ax.scatter(psi_means, res_means, label ="sum")
+ax.scatter(psi_means, ret_means, label ="ret")
+ax.scatter(psi_means, reti1_means, label ="ret_i1")
+ax.scatter(psi_means, reti2_means, label ="ret_i2")
 
 ax.set_xlabel("PSI")
 ax.set_ylabel("#")
 ax.set_title("By variation of v2")
+ax.legend()
+
+
+fig = plt.figure()
+ax = fig.subplots()
+
+ax.plot(v2s, psi_means)
+ax.set_xlabel("v2")
+ax.set_ylabel("PSI")
+
+
+fig = plt.figure()
+ax = fig.subplots()
+ax.scatter(psi_means, psi_stds)
+ax.set_xlabel("PSI")
+ax.set_ylabel("std(PSI)")
+
+fig = plt.figure()
+ax = fig.subplots()
+ax.scatter(res_means, res_stds)
+ax.set_xlabel("mean(total IR)")
+ax.set_ylabel("std(total IR)")
+
+
+fig = plt.figure()
+ax = fig.subplots()
+
+ax.scatter(incl_means, incl_stds, label="Incl")
+ax.scatter(skip_means, skip_stds, label="Skip")
+ax.set_xlabel("mean")
+ax.set_ylabel("std")
+ax.legend()
+
+
+fig = plt.figure()
+ax = fig.subplots()
+ax.scatter(psi_means, incl_means, label = "Incl")
+ax.scatter(psi_means, skip_means, label = "Skip")
+ax.scatter(psi_means, [i+s for i,s  in zip(incl_means, skip_means)], label = "Sum")
+ax.set_xlabel("mean(Psi)")
+ax.set_ylabel("#")
+ax.legend()
+
+
+s = bs.get_exmpl_sim("CoTrSplicing")
+s.set_runtime(80000)
+s.set_param("u1_2_br", 0.05)
+s.set_param("u2_1_br", 0.05)
+v0s = np.linspace(10,130,41)
+psis = []
+for v0 in v0s:
+    s.set_param("elong_v", v0)
+    s.simulate()
+    psis.append(s.get_psi_mean(ignore_fraction = 0.5))
+    
+
+fig = plt.figure()
+ax = fig.subplots()
+ax.plot(v0s, psis)
+ax.set_xlabel("v0")
+ax.set_ylabel("PSI")
+ax.set_title("Elongation rate effect")
