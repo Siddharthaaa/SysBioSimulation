@@ -26,41 +26,41 @@ import glob
 
 
 v0 = 55
-v1 = 6
-v2 = 4.5
-spl_r = 0.031
+v1 = 0.6
+v2 = 0.05
+spl_r = 0.33
 
 s = bs.get_exmpl_sim("CoTrSplicing")
-#s.set_param("spl_rate",2)
-s.set_param("u1_1_br", v1)
-s.set_param("u1_2_br", v1)   
+s.set_param("spl_rate", 0.3)
+#s.set_param("u1_1_br", v1)
+s.set_param("u1_2_br", v2)   
 s.set_param("u2_1_br", v2)
-s.set_param("u2_2_br", v2)
-s.set_param("spl_rate", 0.04)
-s.set_param("elong_v", v0)
-s.set_runtime(30000)
+s.set_param("u2_2_br", v1)
+#s.set_param("spl_rate", spl_r)
+#s.set_param("elong_v", v0)
+s.set_runtime(40000)
 
 psis = []
-for i in range(100):
-    s.simulate()
-    psis.append(s.get_psi_mean(ignore_fraction=0.5))
-
-print(np.median(psis))
+#for i in range(100):
+#    s.simulate()
+#    psis.append(s.get_psi_mean(ignore_fraction=0.5))
+#
+#print(np.median(psis))
 
 #s.plot_course(products=["Skip","Incl", "ret", "ret_i1"], res = ["stoch"])
 #s.plot_course(products=["U2_Pol", "U2_2"], res = ["stoch"])
-s.get_psi_mean(ignore_fraction = 0.5)
+#s.get_psi_mean(ignore_fraction = 0.5)
 
 def model(parameters):
     v1 = parameters["v1"]
     v2 = parameters["v2"]
-    v0 = parameters["v0"]
+#    v0 = parameters["v0"]
     spl_r = parameters["spl_r"]
-    s.set_param("u1_1_br", v1)
+#    s.set_param("u1_1_br", v1)
     s.set_param("u1_2_br", v2)
     s.set_param("u2_1_br", v2)
     s.set_param("u2_2_br", v1)
-    s.set_param("elong_v", v0)
+#    s.set_param("elong_v", v0)
     s.set_param("spl_rate", spl_r)
     s.simulate()
     res = s.get_psi_mean(ignore_fraction = 0.8)
@@ -85,10 +85,10 @@ class y_Distance(pa.Distance):
 # Their mean differs.
 
 
-limits = dict(v1=(0, 10),
-              v2=(0, 10),
-              v0=(10, 100),
-              spl_r=(0, 0.1))
+limits = dict(v1=(0, 2),
+              v2=(0, 0.15),
+#              v0=(10, 100),
+              spl_r=(0, 1))
 bound1 = 0.001
 bound2 = 10
 parameter_priors = pa.Distribution(**{key: pa.RV("beta", 2, 2, a, b - a)
@@ -102,7 +102,7 @@ abc = pa.ABCSMC(
     models, parameter_priors,
     y_Distance(),
     population_size=100,
-    sampler=pa.sampler.MulticoreEvalParallelSampler(10))
+    sampler=pa.sampler.MulticoreEvalParallelSampler(15))
 abc.max_number_particles_for_distance_update = 100
 
 # y_observed is the important piece here: our actual observation.

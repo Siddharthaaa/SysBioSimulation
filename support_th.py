@@ -530,6 +530,9 @@ def show_counts_to_variance(df = None, gillespie = False, log = False,
                             keep_quantile=0.9, rnaseq_efficiency = 1, extrapolate_counts = None,
                             var_stab_std = False):
     
+    res = empty()
+    
+    
     counts = np.nanmean(df.loc[:,(slice(None), "counts")], axis=1)
     df = df[counts <= np.quantile(counts, keep_quantile)] 
     psi_stds = df["std"].values
@@ -553,6 +556,7 @@ def show_counts_to_variance(df = None, gillespie = False, log = False,
                                                        extrapolate_counts=extrapolate_counts,
                                                        var_stab = var_stab_std)
     residues = psi_stds_theo_gil - psi_stds
+    res.residues = residues
     
     points = 25
     counts_theo = np.linspace(counts.min(), counts.max(), points)
@@ -579,9 +583,10 @@ def show_counts_to_variance(df = None, gillespie = False, log = False,
             x = cs[i]
             ax.plot([x,x], [y1,y2], "--", c = col)
         
-        psis_th = np.ones(points)*psi
-        psi_stds_theo_bin = sp.stats.binom.std(counts_theo, psis_th )/counts_theo
-        ax.plot(counts_theo, psi_stds_theo_bin, label = "psi: %2.2f" % psi,c = col, lw=1)
+        if(var_stab_std is False):
+            psis_th = np.ones(points)*psi
+            psi_stds_theo_bin = sp.stats.binom.std(counts_theo, psis_th )/counts_theo
+            ax.plot(counts_theo, psi_stds_theo_bin, label = "psi: %2.2f" % psi,c = col, lw=1)
         
 #        psi_stds_theo_gil = tmp_simulate_std_gillespie(counts_theo, psis_th,
 #                                                       runtime=1000, sim_rnaseq=rnaseq_efficiency,
@@ -597,7 +602,8 @@ def show_counts_to_variance(df = None, gillespie = False, log = False,
     ax.add_artist(leg1)
     fig = plt.figure(figsize = (16,6))
     ax = fig.add_subplot(111)
-    ax.hist(residues)
+    ax.hist(residues, bins = 40)
+    ax.axvline(np.mean(residues), c="red")
     ax.set_title("Residues")
     
     
@@ -644,8 +650,8 @@ def show_counts_to_variance(df = None, gillespie = False, log = False,
 #    ax = fig.add_subplot(1,3,1)
 #   
 #    ax.scatter(counts, psi_stds, label="measured")
-    
-    return fig
+    res.fig = fig
+    return res
 
 def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000,
                                exact_counts = False,

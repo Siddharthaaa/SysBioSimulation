@@ -58,8 +58,9 @@ def read_data():
 s = bs.get_exmpl_sim()
 df_raw = read_data()
 sth.extend_data(df_raw, True)
-df = sth.filter_assumed_hkg(df_raw, psi = (0.1, 0.9), counts_max_cv = 0.8,
-                       min_counts_p = 0.2, min_psis_p = 0.2 )
+df = df_raw
+#df = sth.filter_assumed_hkg(df_raw, psi = (0.1, 0.9), counts_max_cv = 0.8,
+#                       min_counts_p = 0.2, min_psis_p = 0.2 )
 
 counts = df["mean_counts"].values
 psis = df["mean"].values
@@ -139,6 +140,7 @@ pa.visualization.plot_model_probabilities(history)
 #get extimated params 
 #df, w = history.get_distribution(m=0, t=5)
 
+
 fig, ax = plt.subplots()
 for t in range(history.max_t+1):
     df_res, w = history.get_distribution(m=0, t=t)
@@ -151,6 +153,7 @@ for t in range(history.max_t+1):
                      "seq_ql", "ex_pol",
                 xmin=-0.1, xmax=1, numx=100,
                 ymin=-0.1, ymax=1, numy=100)
+ax_t = pa.visualization.plot_kde_2d(*history.get_distribution(m=0)
 #ax.axvline(observation, color="k", linestyle="dashed");
 ax.legend();
 
@@ -158,6 +161,6 @@ pa.visualization.plot_sample_numbers(history)
 pa.visualization.plot_epsilons(history)
 
 if False:
-    s = sth.show_counts_to_variance(df, gillespie=False, log=False, keep_quantile=1,
-                                    rnaseq_efficiency=0.105, extrapolate_counts=0.7,
+    res = sth.show_counts_to_variance(df, gillespie=False, log=False, keep_quantile=1,
+                                    rnaseq_efficiency=0.115, extrapolate_counts=0.76,
                                     var_stab_std=True)
