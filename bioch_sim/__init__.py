@@ -891,15 +891,19 @@ class SimInterface(tk.Frame):
         
         f_plot = tk.Frame(self)
         f_plot.pack(fill=tk.BOTH, side=tk.LEFT, expand=True)
-        
-        f_params_container = tk.Canvas(self)
+        par_sbar = tk.Scrollbar(self, orient="vertical" )
+        scroll_geometry = (0, 0, 1000, 1000)
+        f_params_container = tk.Canvas(self, scrollregion=scroll_geometry,
+                                       yscrollcommand=par_sbar.set)
         
         f_params = tk.Frame(f_params_container)
         f_params.pack(side=tk.BOTTOM, fill = tk.X, expand=True)
-        par_sbar = tk.Scrollbar(f_params_container, orient="vertical", command=f_params_container.yview )
+        
         par_sbar.pack(side=tk.RIGHT, fill=tk.Y)
         f_params_container.configure(yscrollcommand=par_sbar.set)
         f_params_container.pack(side = tk.TOP, fill = tk.BOTH, expand = True)
+        par_sbar.config(command=f_params_container.yview)
+        
 #        def key_pressed(e):
 #            print("key pressed: ", e.char)
 #            if(e.char == "\n"): self.update(True)
