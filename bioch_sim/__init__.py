@@ -10,7 +10,7 @@ from tkinter import filedialog
 import tkinter as tk
 from tkinter.colorchooser import askcolor
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import os
+
 import types
 import pylab as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -195,7 +195,7 @@ class SimParam(object):
         #https://www.ibisc.univ-evry.fr/~fpommereau/SNAKES/API/plugins/gv.html
         if filename is None:
             filename = self.name + ".png"
-        
+            
         pn = pns.PetriNet(self.name)
         for p, v in self.init_state.items():
             cluster = self._clusters[p] if p in self._clusters else ()
@@ -231,7 +231,6 @@ class SimParam(object):
             pn.transpose()
         for e in engine:
             f_name = re.sub("(\.\w+)$", "_"+ e + "\\1", filename)
-            f_name = os.path.join("PN_images", f_name)
             pn.draw(f_name, engine = e, place_attr=draw_place,
                 trans_attr=draw_transition , **kwargs)
         return pn
