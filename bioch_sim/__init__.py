@@ -1176,6 +1176,10 @@ def sigmoid(x, mu=0, y_bounds=(0,1), range_95=6):
     y=y*(y_bounds[1]-y_bounds[0])+y_bounds[0]
     return y
 
+def normalized_distance(x, b, p=2):
+    return [1/(1+ (1/(abs(xx)/b))**p) if xx != 0 else 0 for xx in x]
+
+
 @nb.njit(nb.f8[:,:](nb.f8[:,:],nb.f8[:]))
 def rasterize(x, steps):
     # first col of x must contain time

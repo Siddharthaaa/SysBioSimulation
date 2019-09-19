@@ -41,11 +41,11 @@ s.set_param("u2_2_br", v1)
 s.set_runtime(40000)
 
 psis = []
-#for i in range(100):
-#    s.simulate()
-#    psis.append(s.get_psi_mean(ignore_fraction=0.5))
-#
-#print(np.median(psis))
+for i in range(100):
+    s.simulate()
+    psis.append(s.get_psi_mean(ignore_fraction=0.5))
+
+print(np.median(psis))
 
 #s.plot_course(products=["Skip","Incl", "ret", "ret_i1"], res = ["stoch"])
 #s.plot_course(products=["U2_Pol", "U2_2"], res = ["stoch"])
@@ -64,9 +64,11 @@ def model(parameters):
     s.set_param("spl_rate", spl_r)
     s.simulate()
     res = s.get_psi_mean(ignore_fraction = 0.8)
+    ret = np.mean(s.get_res_from_expr("ret + ret_i2 + ret_i1")[-1000:])
+    
     if np.isnan(res):
         res = 0
-    return {"y": res}
+    return {"psi": res, "ret": ret}
 
 models = [model]
 
@@ -77,8 +79,10 @@ class y_Distance(pa.Distance):
             x_0: dict,
             t: int = None,
             par: dict = None) -> float:
-        res = np.abs(x["y"] - x_0["y"])
-        return res
+        psi_delta = np.abs(x["psi"] - x_0["psi"])
+        ret_delta  = np.abs(x["ret"] - x_0["ret"])
+        norm_distance = 1/(1+(1/abs(ret_delta/2))**2) if ret_delta > 0 else 0
+        return norm_distance + psi_delta
             
 
 # However, our models' priors are not the same.
@@ -107,14 +111,16 @@ abc.max_number_particles_for_distance_update = 100
 
 # y_observed is the important piece here: our actual observation.
 # search for psi == 0.5
-y_observed = 0.5
+psi_observed = 0.5
+ret_total = 10
+
 # and we define where to store the results
 
 db_dir = tempfile.gettempdir()
 db_dir = "./"
 db_path = ("sqlite:///" +
            os.path.join(db_dir, "test.db"))
-abc_id = abc.new(db_path, {"y": y_observed})
+abc_id = abc.new(db_path, {"psi": psi_observed, "ret": ret_total})
 
 print("ABC-SMC run ID:", abc_id)
 
