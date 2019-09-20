@@ -237,31 +237,53 @@ class SimParam(object):
     
     def compile_system(self, dynamic = True):
         #create reaction matrix
-        self._reacts = np.zeros(( len(self._reactions), len(self.init_state)), dtype=int )
-        self._pre = self._reacts.copy()
-        self._post = self._reacts.copy()
+        n = len(self._reactions)
+        m = len(self.init_state)
+        self._reacts = np.zeros((n,m ), dtype=int )
+        self._pre = np.zeros((n,m ), dtype = object)
+        self._post = self._pre.copy()
         self._state = list(self.init_state.values())
         self._state.insert(0,0)
         self._state = np.array(self._state, dtype=np.float64)
         names = list(self.init_state.keys())
         i=0
+        func_update_pre = "@nb.njit\ndef update_pre(st, pars, pre):\n"
+        func_update_post = "@nb.njit\ndef update_post(st, pars, pre):\n"
         for react in self._reactions:
             for substance in react.keys():
+                subs_i = names.index(substance)
                 for v in react[substance]:
-                    if v < 0:
-                        self._pre[i, names.index(substance)] += -v
+                    if type(v) is str:
+                        if v.startswith("-"):
+                            v = v[1:]
+                            self._pre[i, subs_i] = v
+                            func_update_pre += "\tpre[%d,%d] = %s\n" % (i, subs_i, v)
+                        else:
+                            self._post[i, subs_i] = v
+                            func_update_post += "\tpre[%d,%d] = %s\n" % (i, subs_i, v)
                     else:
-                        self._post[i, names.index(substance)] += v
+                        if v < 0:
+                            self._pre[i, subs_i] += -v
+                        else:
+                            self._post[i, subs_i] += v
 #                self._reacts[i, names.index(substance)] += sum(react[substance])
             i+=1
-        self._reacts = self._post - self._pre
+        func_update_pre += "\treturn None \nself._update_pre = update_pre"
+        func_update_post += "\treturn None \nself._update_post = update_post"
+        func_update_post = self._sub_vars(func_update_post)
+        func_update_pre = self._sub_vars(func_update_pre)
+        print(func_update_post)
+        print(func_update_pre)
+        exec(func_update_post)
+        exec(func_update_pre)
+#        self._reacts = self._post - self._pre
         
         #create rates function
         self._r_s = np.zeros((len(self._rate_funcs),))
         func_str= "@nb.njit\n"
 #        func_str= ""
         
-        func_str+= "def _r_f_(st, constants, _r_s):\n"
+        func_str+= "def _r_f_(st, pars, _r_s):\n"
 #        func_str+= "\t_r_s=np.zeros(%d)\n" % len(self._r_s)
         func_str+= "\tt=st[0]\n"
         i=0
@@ -269,17 +291,7 @@ class SimParam(object):
             func_str += "\t_r_s[%d] = " %i + func + "\n"
             i+=1
         
-        i=0
-        for name in self.params.keys():
-            if(dynamic):
-                func_str = re.sub("\\b" + name + "\\b", "constants[%d]" % i, func_str)
-            else:
-                func_str = re.sub("\\b" + name + "\\b", "%e" % self.params[name], func_str)
-            i+=1
-        i=1
-        for name in self.init_state.keys():
-            func_str = re.sub("\\b" + name + "\\b", "st[%d]" % i, func_str)
-            i+=1
+        func_str = self._sub_vars(func_str, par_name = "pars", place_name="st", dynamic=dynamic)
         func_str += "\treturn _r_s \n"
         func_str += "self._rates_function=_r_f_ \n"
 #        print(func_str)
@@ -289,6 +301,17 @@ class SimParam(object):
         self._dynamic_compile = dynamic
 #        self._rates_function = types.MethodType( self._rates_function, self )
         return func_str
+    
+    def _sub_vars(self, s, par_name="pars", place_name = "st", dynamic = True):
+        for i, name in enumerate(self.params.keys()):
+            if(dynamic):
+                s = re.sub("\\b" + name + "\\b", "%s[%d]" % (par_name,i), s)
+            else:
+                s = re.sub("\\b" + name + "\\b", "%e" % self.params[name], s)
+        for i, name in enumerate(self.init_state.keys()):
+            s = re.sub("\\b" + name + "\\b", "%s[%d]" % (place_name,i+1), s)
+        return s
+    
     def simulate(self, ODE = False, ret_raw=False, max_steps = 1e10):
         if not self._is_compiled:
             self.compile_system(dynamic=True)
@@ -1402,6 +1425,18 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         s.add_reaction("d2*Skip", {"Skip":-1}, "Skip. degr."  )
         s.add_reaction("s3*pre_RNA", {"pre_RNA":-1, "ret":1}, "Retention" )
         s.add_reaction("d3*ret",  {"ret": -1}, "ret. degr" )
+    elif(name == "test"):
+        params = {"p1":1, "p2":2, "p3":3, "degr":100}
+        s = SimParam(name, 100,1001, params,
+                     init_state = {"A1": 10, "A2": 15, "A3": 0})
+        s.simulate_ODE = False
+        s.add_reaction("p1*A1", {"A1":-1, "A3":2})
+        s.add_reaction("p2*A2", {"A1":1, "A3":1})
+        s.add_reaction("p3*A3", {"A3":-1, "A1":"A3*p2"})
+        s.add_reaction("degr*A1", {"A1":-1 })
+        s.add_reaction("degr*A3", {"A3":"-2*A1" })
+        s.add_reaction("degr*A2", {"A2":-1 })
+        
     elif(name == "hill_fb"):
                 
         k_on=0
