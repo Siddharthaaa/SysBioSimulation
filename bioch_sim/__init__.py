@@ -246,13 +246,22 @@ class SimParam(object):
         self._state.insert(0,0)
         self._state = np.array(self._state, dtype=np.float64)
         names = list(self.init_state.keys())
-        i=0
+    
+        self._update_st_funcs =[]
+        self._update_st_funcs_str =[]
         func_update_pre = "@nb.njit\ndef update_pre(st, pars, pre):\n"
-        func_update_post = "@nb.njit\ndef update_post(st, pars, pre):\n"
-        for react in self._reactions:
+        func_update_post = "@nb.njit\ndef update_post(st, pars, post):\n"
+        for i, react in enumerate(self._reactions):
+            update_st_func = "@nb.njit\ndef update_st(st, pars, pre, st_tmp):\n"
+            subs_to_update = []
+            updates = []
             for substance in react.keys():
                 subs_i = names.index(substance)
+                subs_to_update.append("st[%d]" % (subs_i+1))
+                update = ""
                 for v in react[substance]:
+                    if(v != 0):
+                        update += " + " + str(v)
                     if type(v) is str:
                         if v.startswith("-"):
                             v = v[1:]
@@ -260,14 +269,19 @@ class SimParam(object):
                             func_update_pre += "\tpre[%d,%d] = %s\n" % (i, subs_i, v)
                         else:
                             self._post[i, subs_i] = v
-                            func_update_post += "\tpre[%d,%d] = %s\n" % (i, subs_i, v)
+                            func_update_post += "\tpost[%d,%d] = %s\n" % (i, subs_i, v)
                     else:
                         if v < 0:
                             self._pre[i, subs_i] += -v
                         else:
                             self._post[i, subs_i] += v
 #                self._reacts[i, names.index(substance)] += sum(react[substance])
-            i+=1
+                update = self._sub_vars(update)
+                updates.append(update)
+            update_st_func += "\t" + " ,".join(subs_to_update) + " ,".join(updates) + "\n"
+            update_st_func += "\treturn None \nself._update_st_funcs.append(update_st)\n"
+            self._update_st_funcs_str.append(update_st_func)
+            exec(update_st_func)
         func_update_pre += "\treturn None \nself._update_pre = update_pre"
         func_update_post += "\treturn None \nself._update_post = update_post"
         func_update_post = self._sub_vars(func_update_post)
@@ -286,10 +300,18 @@ class SimParam(object):
         func_str+= "def _r_f_(st, pars, _r_s):\n"
 #        func_str+= "\t_r_s=np.zeros(%d)\n" % len(self._r_s)
         func_str+= "\tt=st[0]\n"
-        i=0
-        for func in self._rate_funcs:
-            func_str += "\t_r_s[%d] = " %i + func + "\n"
-            i+=1
+
+        for i, func in enumerate(self._rate_funcs):
+            v_to_chek =[]
+            for j, v in enumerate(self._pre[i]):
+                if(v != 0):
+#                    print(v)
+                    v_to_chek.append(str(v) + " <= st[%d]" % (j+1))
+            
+            if len(v_to_chek) > 0:
+                func_str += "\t_r_s[%d] = " %i + func + " if (" + ") and (".join(v_to_chek) + ") else 0" + "\n"
+            else:
+                func_str += "\t_r_s[%d] = " %i + func  + "\n"
         
         func_str = self._sub_vars(func_str, par_name = "pars", place_name="st", dynamic=dynamic)
         func_str += "\treturn _r_s \n"
@@ -297,6 +319,7 @@ class SimParam(object):
 #        print(func_str)
 #        print(self.param_str())
         exec(func_str)
+        self._update_st_funcs =[]
         self._is_compiled = True
         self._dynamic_compile = dynamic
 #        self._rates_function = types.MethodType( self._rates_function, self )
@@ -312,6 +335,30 @@ class SimParam(object):
             s = re.sub("\\b" + name + "\\b", "%s[%d]" % (place_name,i+1), s)
         return s
     
+    def update_pre(self, st=None, pre=None):
+        if st is None:
+            st = self._state
+        if pre is None:
+            pre = np.zeros(shape = self._pre.shape, dtype = np.int32)
+            for i in range(pre.shape[0]):
+                for j in range(pre.shape[1]):
+                    pre[i,j] = self._pre[i,j] if type(self._pre[i,j]) is not str else 0
+        pars = np.array(list(self.params.values()))                    
+        self._update_pre(st, pars, pre)
+        return pre
+    
+    def update_post(self, st=None, post=None):
+        if st is None:
+            st = self._state
+        if post is None:
+            post = np.zeros(shape = self._post.shape, dtype = np.int32)
+            for i in range(post.shape[0]):
+                for j in range(post.shape[1]):
+                    post[i,j] = self._post[i,j] if type(self._post[i,j]) is not str else 0
+        pars = np.array(list(self.params.values()))                    
+        self._update_post(st, pars, post)
+        return post
+    
     def simulate(self, ODE = False, ret_raw=False, max_steps = 1e10):
         if not self._is_compiled:
             self.compile_system(dynamic=True)
@@ -325,7 +372,12 @@ class SimParam(object):
         tt = params["raster"]
 #        print("raster:" ,len(tt))
         self._constants = np.array(list(self.params.values()))
-        sim_st = compute_stochastic_evolution(self.get_reacts(),
+        _pre = self.update_pre()
+        _post = self.update_post()
+        sim_st = compute_stochastic_evolution(self._update_pre,
+                                              self._update_post,
+                                              _pre,
+                                              _post,
                                               self._state,
                                               nb.f4(self.runtime),
                                               self._rates_function,
@@ -1148,22 +1200,27 @@ def get_ODE_delta(x,t,sim):
     return dx
   
 @nb.njit#(nb.f8(nb.f8[:,:], nb.f8[:], nb.f4, nb.f8[:](nb.f8[:],), nb.i4))
-def compute_stochastic_evolution(reactions, state, runtime, rate_func, constants, time_steps, max_steps):
+def compute_stochastic_evolution(pre_f, post_f, pre, post, state, runtime, rate_func, constants, time_steps, max_steps):
    
     STATE = np.zeros((len(time_steps), len(state)),dtype=np.float64)
 #    print(state.dtype)
 #    state= np.array(state, dtype = np.int64)
+    reactions = np.zeros(pre.shape, dtype = np.int32)
     STATE[0,:] = state
     tf = runtime
     tt = 0
     steps = nb.int64(0)
     i = steps+1
     length = len(time_steps)
-    rates_array = np.zeros(len(reactions)) 
+    rates_array = np.zeros(len(pre)) 
     while tt <= tf and steps < max_steps and i < length:
         
         # sample two random numbers uniformly between 0 and 1
         rr = sp.random.uniform(0,1,2)
+        pre_f(state, constants, pre)
+        post_f(state, constants, post)
+        reactions = post-pre
+#        print(reactions)
         a_s = rate_func(state, constants, rates_array)
 #        print(a_s)
         a_0 = a_s.sum()
