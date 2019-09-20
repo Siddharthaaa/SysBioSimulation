@@ -32,6 +32,8 @@ from scipy.integrate import odeint
 import pickle
 import re
 import numba as nb
+import numba.typed
+from numba.typed import List
 from sklearn.cluster import KMeans, MeanShift, k_means
 from numba import cuda
 from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32, xoroshiro128p_uniform_float64
@@ -247,12 +249,12 @@ class SimParam(object):
         self._state = np.array(self._state, dtype=np.float64)
         names = list(self.init_state.keys())
     
-        self._update_st_funcs =[]
+        self._fire_transition =[]
         self._update_st_funcs_str =[]
         func_update_pre = "@nb.njit\ndef update_pre(st, pars, pre):\n"
         func_update_post = "@nb.njit\ndef update_post(st, pars, post):\n"
         for i, react in enumerate(self._reactions):
-            update_st_func = "@nb.njit\ndef update_st(st, pars, pre, st_tmp):\n"
+            update_st_func = "@nb.njit\ndef update_st(st, pars):\n"
             subs_to_update = []
             updates = []
             for substance in react.keys():
@@ -261,7 +263,7 @@ class SimParam(object):
                 update = ""
                 for v in react[substance]:
                     if(v != 0):
-                        update += " + " + str(v)
+                        update += " +" + str(v)
                     if type(v) is str:
                         if v.startswith("-"):
                             v = v[1:]
@@ -278,8 +280,8 @@ class SimParam(object):
 #                self._reacts[i, names.index(substance)] += sum(react[substance])
                 update = self._sub_vars(update)
                 updates.append(update)
-            update_st_func += "\t" + " ,".join(subs_to_update) + " ,".join(updates) + "\n"
-            update_st_func += "\treturn None \nself._update_st_funcs.append(update_st)\n"
+            update_st_func += "\t" + " ,".join(subs_to_update) + " =" + " ,".join(updates) + "\n"
+            update_st_func += "\treturn None \nself._fire_transition.append(update_st)\n"
             self._update_st_funcs_str.append(update_st_func)
             exec(update_st_func)
         func_update_pre += "\treturn None \nself._update_pre = update_pre"
@@ -309,7 +311,7 @@ class SimParam(object):
                     v_to_chek.append(str(v) + " <= st[%d]" % (j+1))
             
             if len(v_to_chek) > 0:
-                func_str += "\t_r_s[%d] = " %i + func + " if (" + ") and (".join(v_to_chek) + ") else 0" + "\n"
+                func_str += "\t_r_s[%d] = (" %i + func + ") if (" + ") and (".join(v_to_chek) + ") else 0" + "\n"
             else:
                 func_str += "\t_r_s[%d] = " %i + func  + "\n"
         
@@ -362,6 +364,7 @@ class SimParam(object):
     def simulate(self, ODE = False, ret_raw=False, max_steps = 1e10):
         if not self._is_compiled:
             self.compile_system(dynamic=True)
+        cpu_time = time.time()
         self._state = list(self.init_state.values())
         self._state.insert(0,0)
         self._state = np.array(self._state, dtype=np.float64)
@@ -372,16 +375,11 @@ class SimParam(object):
         tt = params["raster"]
 #        print("raster:" ,len(tt))
         self._constants = np.array(list(self.params.values()))
-        _pre = self.update_pre()
-        _post = self.update_post()
-        sim_st = compute_stochastic_evolution(self._update_pre,
-                                              self._update_post,
-                                              _pre,
-                                              _post,
-                                              self._state,
+        sim_st = compute_stochastic_evolution(self._state,
+                                              self._constants,
                                               nb.f4(self.runtime),
                                               self._rates_function,
-                                              self._constants,
+                                              np.array(self._fire_transition),
                                               np.array(tt, np.float32),
                                               nb.int64(max_steps))
         
@@ -389,8 +387,6 @@ class SimParam(object):
             results["stochastic"] = sim_st
 #        sim_st_raster = rasterize(sim_st, tt)
         results["stoch_rastr"] = sim_st
-        
-        from numba import cuda
         
         #determinisitic simulation
         
@@ -405,6 +401,8 @@ class SimParam(object):
             results["ODE"] = np.hstack((tt.reshape(len(tt),1),sol_deterministic))
         self.results=results
         self.results = results
+        cpu_time = time.time() - cpu_time
+        print("runtime: ", cpu_time )
         return results
     
     
@@ -1200,26 +1198,23 @@ def get_ODE_delta(x,t,sim):
     return dx
   
 @nb.njit#(nb.f8(nb.f8[:,:], nb.f8[:], nb.f4, nb.f8[:](nb.f8[:],), nb.i4))
-def compute_stochastic_evolution(pre_f, post_f, pre, post, state, runtime, rate_func, constants, time_steps, max_steps):
+def compute_stochastic_evolution(state, constants, runtime, rate_func, transition_funcs,  time_steps, max_steps):
    
     STATE = np.zeros((len(time_steps), len(state)),dtype=np.float64)
 #    print(state.dtype)
 #    state= np.array(state, dtype = np.int64)
-    reactions = np.zeros(pre.shape, dtype = np.int32)
     STATE[0,:] = state
     tf = runtime
     tt = 0
     steps = nb.int64(0)
+    
     i = steps+1
     length = len(time_steps)
-    rates_array = np.zeros(len(pre)) 
+    rates_array = np.zeros(len(transition_funcs)) 
     while tt <= tf and steps < max_steps and i < length:
         
         # sample two random numbers uniformly between 0 and 1
         rr = sp.random.uniform(0,1,2)
-        pre_f(state, constants, pre)
-        post_f(state, constants, post)
-        reactions = post-pre
 #        print(reactions)
         a_s = rate_func(state, constants, rates_array)
 #        print(a_s)
@@ -1241,7 +1236,8 @@ def compute_stochastic_evolution(pre_f, post_f, pre, post, state, runtime, rate_
         #print(cum_a_s, prop)
         ind = np.where(prop <= cum_a_s)[0][0]
         # update the systems state
-        state[1:] +=reactions[ind]
+#        state[1:] +=reactions[ind]
+        transition_funcs[ind](state, constants)
         steps+=1
 #        STATE[steps,:] = state
         
