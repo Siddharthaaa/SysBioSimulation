@@ -661,7 +661,7 @@ def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000,
    
     s =bs.get_exmpl_sim("basic")
     s.simulate_ODE = False
-    s.set_raster_count(10001)
+    s.set_raster_count(20001)
     s.set_runtime(runtime)
     res = np.zeros(len(counts))
     
@@ -692,7 +692,7 @@ def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000,
         s.simulate()
         (indx, psis) = s.compute_psi(ignore_extremes=False, recognize_threshold=1,
                                     exact_sum= c if exact_counts else None,
-                                    sim_rnaseq=sim_rnaseq)
+                                    sim_rnaseq=sim_rnaseq, ignore_fraction=0.8)
         if var_stab:
             psis = np.arcsin(np.sqrt(psis))
         res[i] = np.nanstd(psis, ddof=1)

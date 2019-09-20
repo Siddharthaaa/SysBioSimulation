@@ -835,7 +835,7 @@ class SimParam(object):
             fig, ax = plt.subplots()
         
         ax.plot(vals, res)
-        ax.set_ylabel(func.__func__.__name__ +   str(func_pars))
+        ax.set_ylabel(func.__name__ +   str(func_pars))
         ax.set_xlabel(par)
         
         return ax

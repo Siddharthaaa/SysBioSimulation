@@ -28,10 +28,10 @@ import glob
 v0 = 55
 v1 = 0.6
 v2 = 0.05
-spl_r = 0.33
+spl_r = 0.6
 
 s = bs.get_exmpl_sim("CoTrSplicing")
-s.set_param("spl_rate", 0.3)
+s.set_param("spl_rate", spl_r)
 #s.set_param("u1_1_br", v1)
 s.set_param("u1_2_br", v2)   
 s.set_param("u2_1_br", v2)
@@ -39,6 +39,16 @@ s.set_param("u2_2_br", v1)
 #s.set_param("spl_rate", spl_r)
 #s.set_param("elong_v", v0)
 s.set_runtime(40000)
+
+def tmp_funk(s):
+    r = s.get_res_from_expr(expr="ret + ret_i1 + ret_i2")
+    r2 = s.get_res_from_expr(expr="ret")
+    r3 = s.get_res_col("ret_i1")
+    r4 = s.get_res_col("ret_i2")
+    return np.mean(r[-2000:]), np.mean(r2[-2000:]), np.mean(r3[-2000:]), np.mean(r4[-2000:] )
+
+ax = s.plot_par_var_1d("elong_v", np.linspace(10, 400, 41), func = tmp_funk, s=s)
+
 
 psis = []
 for i in range(100):

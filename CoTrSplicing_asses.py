@@ -31,7 +31,7 @@ def get_total_IR(s):
     
 s = bs.get_exmpl_sim("CoTrSplicing")
 #s.draw_pn(rates=False)
-s.set_runtime(500)
+s.set_runtime(40000)
 s.show_interface()
 s.compile_system()
 v2s = np.linspace(0.1, 5, 40)
@@ -79,7 +79,7 @@ res = s.plot_par_var_2d(pars, None, s.get_psi_mean, ignore_fraction=0.8)
 
 s = bs.get_exmpl_sim("CoTrSplicing")
 s.set_runtime(60000)
-s.set_param("elong_v", 50)
+s.set_param("elong_v", 55)
 psi_means =[]
 psis = []
 res = []
@@ -110,12 +110,24 @@ res_stds = [np.std(r[-3000:]) for r in res]
 ret_means = [np.mean(r[-3000:]) for r in ret]
 reti1_means = [np.mean(r[-3000:]) for r in reti1]
 reti2_means = [np.mean(r[-3000:]) for r in reti2]
-psi_stds = [np.std(r) for r in psis]
+psi_stds = [np.std(r[-3000:]) for r in psis]
 
 incl_means = [np.mean(r[-3000:]) for r in incl]
 incl_stds = [np.std(r[-3000:]) for r in incl]
 skip_means = [np.mean(r[-3000:]) for r in skip]
 skip_stds = [np.std(r[-3000:]) for r in skip]
+
+sum_isoform = [ i + s for i, s in zip(incl_means, skip_means)]
+
+theo_stds = sth.tmp_simulate_std_gillespie(sum_isoform,psi_means, runtime=10000)
+
+fig = plt.figure()
+ax = fig.subplots()
+ax.scatter(psi_stds, theo_stds)
+m = max(psi_stds)
+ax.plot([0,m],[0,m], c="red")
+ax.set_xlabel("CoTr: std(PSI)")
+ax.set_ylabel("Basic: std(PSI)")
 
 
 fig = plt.figure()
@@ -190,3 +202,14 @@ ax.plot(v0s, psis)
 ax.set_xlabel("v0")
 ax.set_ylabel("PSI")
 ax.set_title("Elongation rate effect")
+
+
+def tmp_funk(s):
+    r = s.get_res_from_expr(expr="ret + ret_i1 + ret_i2")
+    r2 = s.get_res_from_expr(expr="ret")
+    r3 = s.get_res_col("ret_i1")
+    r4 = s.get_res_col("ret_i2")
+    return np.mean(r[-2000:]), np.mean(r2[-2000:]), np.mean(r3[-2000:]), np.mean(r4[-2000:] )
+
+ax = s.plot_par_var_1d("elong_v", np.linspace(10, 400, 41), func = tmp_funk, s=s)
+
