@@ -33,7 +33,7 @@ s = bs.get_exmpl_sim("CoTrSplicing")
 #s = bs.get_exmpl_sim("test")
 s.compile_system()
 #s.draw_pn(rates=False)
-s.set_runtime(500)
+s.set_runtime(10000)
 s.show_interface()
 s.compile_system()
 v2s = np.linspace(0.1, 5, 40)
@@ -46,11 +46,11 @@ for v2 in v2s:
     psis.append(s.get_psi_mean())
     ret_total.append(get_total_IR(s))
 
-s.plot_course(products=["ret_i2","ret_i1","ret"], res = ["stoch"])
-s.plot_course(products=["Skip","Incl","ret", "mRNA"], res = ["stoch"])
-s.plot_course(products=["Skip","Incl"], res = ["stoch"])
-s.plot_course(products=["U1_1", "U1_2"], res = ["stoch"])
-s.plot_course(products=["Pol_on", "U1_1"], res = ["stoch"])
+#s.plot_course(products=["ret_i2","ret_i1","ret"], res = ["stoch"])
+#s.plot_course(products=["Skip","Incl","ret"], res = ["stoch"])
+#s.plot_course(products=["Skip","Incl"], res = ["stoch"])
+#s.plot_course(products=["U1_1", "U1_2"], res = ["stoch"])
+#s.plot_course(products=["Pol_on", "U1_1"], res = ["stoch"])
 
 fig = plt.figure()
 ax = fig.subplots()
@@ -75,7 +75,7 @@ s.plot_par_var_1d("elong_v", np.linspace(20,200,10),None, s.get_psi_mean)
     
 s = bs.get_exmpl_sim("CoTrSplicing")
 s.set_runtime(40000)
-pars = {"elong_v": np.linspace(10,500,50), "u1_2_br": np.linspace(0.01,0.4,40)}
+pars = {"elong_v": np.linspace(10,200,30), "u1_2_br": np.linspace(0.001,0.02, 40)}
 res = s.plot_par_var_2d(pars, None, s.get_psi_mean, ignore_fraction=0.8)
 
 
@@ -90,7 +90,7 @@ reti1 = []
 reti2 = []
 incl =[]
 skip = []
-v2s = np.linspace(0.001, 0.12, 201)
+v2s = np.linspace(0.001, 0.12, 101)
 
 for v2  in v2s:
     s.set_param("u1_2_br", v2)

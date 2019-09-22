@@ -37,8 +37,8 @@ from numba.typed import List
 from sklearn.cluster import KMeans, MeanShift, k_means
 from numba import cuda
 from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32, xoroshiro128p_uniform_float64
-
-drawPetriNets = True
+import random
+drawPetriNets = False
 if(drawPetriNets):
     import snakes
     import snakes.plugins
@@ -91,6 +91,7 @@ class SimParam(object):
     def _reset_results(self):
         self.bimodality = {}    
         self.results={}
+        self._constants = np.array(list(self.params.values()))
     def set_raster_count(self, discr_points):
         self.raster_len = discr_points
         self.raster =  sp.linspace(0,self.runtime,int(discr_points))
@@ -133,11 +134,17 @@ class SimParam(object):
         """
         if state is None:
             state=self._state
-        return self._rates_function(state, self._constants, np.zeros(len(self._reactions)))
+        self._update_pre(state, self._constants, self._curr_pre)
+        return self._rates_function(state, self._constants
+                                    , np.zeros(len(self._reactions)),
+                                    self._curr_pre)
     def get_reacts(self, state = None):
         #returns reaction matrix
         if state is None:
             state = self._state
+        self._update_pre(state, self._constants, self._curr_pre)
+        self._update_post(state, self._constants,self._curr_post)
+        self._reacts= self._curr_post - self._curr_pre
         return self._reacts
     def get_derivation(self, state = None):
         return self.get_reacts(state).transpose().dot(self.get_rates())
@@ -238,6 +245,7 @@ class SimParam(object):
         return pn
     
     def compile_system(self, dynamic = True):
+        self._constants = np.array(list(self.params.values()))
         #create reaction matrix
         n = len(self._reactions)
         m = len(self.init_state)
@@ -250,7 +258,7 @@ class SimParam(object):
         names = list(self.init_state.keys())
     
         self._fire_transition =[]
-        self._update_st_funcs_str =[]
+        self._fire_transition_str =[]
         func_update_pre = "@nb.njit\ndef update_pre(st, pars, pre):\n"
         func_update_post = "@nb.njit\ndef update_post(st, pars, post):\n"
         for i, react in enumerate(self._reactions):
@@ -262,8 +270,9 @@ class SimParam(object):
                 subs_to_update.append("st[%d]" % (subs_i+1))
                 update = ""
                 for v in react[substance]:
-                    if(v != 0):
-                        update += " +" + str(v)
+                    if(v == 0):
+                        v = "-2*" + substance
+                    update += " +" + str(v)
                     if type(v) is str:
                         if v.startswith("-"):
                             v = v[1:]
@@ -275,14 +284,17 @@ class SimParam(object):
                     else:
                         if v < 0:
                             self._pre[i, subs_i] += -v
-                        else:
+                        elif v > 0:
                             self._post[i, subs_i] += v
+                        else:
+                            # Inhibition by 0
+                            self._pre[i, subs_i] = "2*" + substance
 #                self._reacts[i, names.index(substance)] += sum(react[substance])
                 update = self._sub_vars(update)
                 updates.append(update)
             update_st_func += "\t" + " ,".join(subs_to_update) + " =" + " ,".join(updates) + "\n"
             update_st_func += "\treturn None \nself._fire_transition.append(update_st)\n"
-            self._update_st_funcs_str.append(update_st_func)
+            self._fire_transition_str.append(update_st_func)
             exec(update_st_func)
         func_update_pre += "\treturn None \nself._update_pre = update_pre"
         func_update_post += "\treturn None \nself._update_post = update_post"
@@ -299,7 +311,7 @@ class SimParam(object):
         func_str= "@nb.njit\n"
 #        func_str= ""
         
-        func_str+= "def _r_f_(st, pars, _r_s):\n"
+        func_str+= "def _r_f_(st, pars, _r_s, _pre):\n"
 #        func_str+= "\t_r_s=np.zeros(%d)\n" % len(self._r_s)
         func_str+= "\tt=st[0]\n"
 
@@ -308,7 +320,8 @@ class SimParam(object):
             for j, v in enumerate(self._pre[i]):
                 if(v != 0):
 #                    print(v)
-                    v_to_chek.append(str(v) + " <= st[%d]" % (j+1))
+#                    v_to_chek.append(str(v) + " <= st[%d]" % (j+1))
+                    v_to_chek.append("_pre[%d,%d] " % (i,j) + " <= st[%d]" % (j+1))
             
             if len(v_to_chek) > 0:
                 func_str += "\t_r_s[%d] = (" %i + func + ") if (" + ") and (".join(v_to_chek) + ") else 0" + "\n"
@@ -324,6 +337,9 @@ class SimParam(object):
         self._update_st_funcs =[]
         self._is_compiled = True
         self._dynamic_compile = dynamic
+        self._curr_pre = self.update_pre()
+        self._curr_post = self.update_post()
+        
 #        self._rates_function = types.MethodType( self._rates_function, self )
         return func_str
     
@@ -361,7 +377,7 @@ class SimParam(object):
         self._update_post(st, pars, post)
         return post
     
-    def simulate(self, ODE = False, ret_raw=False, max_steps = 1e10):
+    def simulate(self, ODE = False, ret_raw=False, max_steps = 1e9):
         if not self._is_compiled:
             self.compile_system(dynamic=True)
         cpu_time = time.time()
@@ -374,12 +390,21 @@ class SimParam(object):
         initial_state = params["init_state"]
         tt = params["raster"]
 #        print("raster:" ,len(tt))
-        self._constants = np.array(list(self.params.values()))
+#        numba.types.functions.Dispatcher
+        
+#        fire_transitions = nb.typed.Dict()
+#        for i, f_trans in enumerate(self._fire_transition):
+#            fire_transitions[i]=f_trans
+        pre = self.update_pre()
+        post = self.update_post()
         sim_st = compute_stochastic_evolution(self._state,
                                               self._constants,
                                               nb.f4(self.runtime),
                                               self._rates_function,
-                                              np.array(self._fire_transition),
+                                              tuple(self._fire_transition),
+                                              self._update_pre,
+                                              self._update_post,
+                                              pre, post,
                                               np.array(tt, np.float32),
                                               nb.int64(max_steps))
         
@@ -1198,8 +1223,9 @@ def get_ODE_delta(x,t,sim):
     return dx
   
 @nb.njit#(nb.f8(nb.f8[:,:], nb.f8[:], nb.f4, nb.f8[:](nb.f8[:],), nb.i4))
-def compute_stochastic_evolution(state, constants, runtime, rate_func, transition_funcs,  time_steps, max_steps):
-   
+def compute_stochastic_evolution(state, constants, runtime, rate_func, transition_funcs,
+                                 pre_upd_f, post_upd_f , pre, post, time_steps, max_steps):
+#    transition_funcs = numba.typed.List(transition_funcs)
     STATE = np.zeros((len(time_steps), len(state)),dtype=np.float64)
 #    print(state.dtype)
 #    state= np.array(state, dtype = np.int64)
@@ -1210,13 +1236,19 @@ def compute_stochastic_evolution(state, constants, runtime, rate_func, transitio
     
     i = steps+1
     length = len(time_steps)
-    rates_array = np.zeros(len(transition_funcs)) 
+    rates_array = np.zeros(len(pre))
+    rr = np.zeros(2)
     while tt <= tf and steps < max_steps and i < length:
         
         # sample two random numbers uniformly between 0 and 1
-        rr = sp.random.uniform(0,1,2)
+#        rr = np.random.uniform(0,1,2)
+        rr[0] = random.random()
+        rr[1] = random.random()
 #        print(reactions)
-        a_s = rate_func(state, constants, rates_array)
+#        for blabal in range(1000):
+        pre_upd_f(state, constants, pre)
+        post_upd_f(state, constants, post)
+        a_s = rate_func(state, constants, rates_array, pre)
 #        print(a_s)
         a_0 = a_s.sum()
         # time step: Meine Version
@@ -1236,8 +1268,9 @@ def compute_stochastic_evolution(state, constants, runtime, rate_func, transitio
         #print(cum_a_s, prop)
         ind = np.where(prop <= cum_a_s)[0][0]
         # update the systems state
-#        state[1:] +=reactions[ind]
-        transition_funcs[ind](state, constants)
+        state[1:] +=post[ind] - pre[ind]
+#        transition_funcs[ind](state, constants) # does not work :(
+        
         steps+=1
 #        STATE[steps,:] = state
         
@@ -1574,7 +1607,6 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                 "u2_1_ur": 0.001,
                 "u2_2_ur": 0.001,
                 "tr_term_rate": 100,
-                "Ux_clear_rate": 1e9,
 #                "s1":s1, "s2":s2, "s3": 1e-4,
                 # http://book.bionumbers.org/how-fast-do-rnas-and-proteins-degrade/
                 "d0":2e-4, "d1": 2e-4, "d2":2e-4, "d3":1e-3 # mRNA half life: 10-20 h -> lambda: math.log(2)/hl
@@ -1588,8 +1620,7 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                                       "Skip":0, "Incl": 0, "ret": 0,
                                       "U1_1":0, "U1_2":0,   #Splicosome units U1 binded
                                       "U2_1":0, "U2_2":0,
-                                      "Intr1":0, "Intr2":0, "Exon1":0,
-                                      "Intr1_ex":0, "Intr2_ex":0, "Exon1_ex":0})
+                                      "Intr1":0, "Intr2":0, "Exon1":0})
         # for drawing PN with SNAKES
         [s.set_cluster(sp,(0,)) for sp in ["Incl", "Skip"]]
         [s.set_cluster(sp,(1,)) for sp in ["ret", "ret_i1", "ret_i2"]]
@@ -1599,69 +1630,81 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         [s.set_cluster(sp,(5,)) for sp in ["U1_1", "U1_2", "U2_1", "U2_2"]]
         ###########################
         
-        s.add_reaction("pr_on * Pol_off if U1_1 + U1_2 + U2_1 + U2_2 < 1 else 0", # ugly workaround with Ux
-                       {"Pol_on":1, "Pol_off": -1,"Exon1":1, "Intr1":1,"Intr2":1, "Tr_dist": gene_len},
+        s.add_reaction("pr_on * Pol_off",
+                       {"Pol_on":1, "Pol_off": -1,"Exon1":1, "Intr1":1,"Intr2":1,
+                        "Tr_dist": gene_len, "nascRNA_bc": "-nascRNA_bc"},
                        name = "Transc. initiation")
         
-        s.add_reaction("elong_v * Pol_on if Pol_pos < gene_len else 0",
+        s.add_reaction("elong_v * Pol_on",
                        {"nascRNA_bc": 1, "Pol_pos":1, "Tr_dist":-1},
                        name = "Elongation")
         
         # Ux (un)binding cinetics
-        s.add_reaction("u1_1_br * Intr1 if Pol_pos > u1_1_bs_pos and U1_1 < 1 else 0",
-                       {"U1_1":1}, "U1_1 binding")
+        s.add_reaction("u1_1_br * Intr1",
+                       {"U1_1":[1,0], "Intr1": [-1,1],
+                        "Pol_pos":["-u1_1_bs_pos", "u1_1_bs_pos"]},
+                       "U1_1 binding")
         s.add_reaction("u1_1_ur * U1_1", {"U1_1":-1}, "U1_1 diss.")
         
-        s.add_reaction("u1_2_br * Intr2 if Pol_pos > u1_2_bs_pos and U1_2 < 1 else 0",
-                       {"U1_2":1}, "U1_2 binding")
+        s.add_reaction("u1_2_br * Intr2",
+                       {"U1_2":[1,0], "Intr2": [-1,1],
+                        "Pol_pos":["-u1_2_bs_pos", "u1_2_bs_pos"]},
+                        "U1_2 binding")
         s.add_reaction("u1_2_ur * U1_2", {"U1_2":-1}, "U1_2 diss.")
         
-        s.add_reaction("u2_1_br * Intr1 if Pol_pos > u2_1_bs_pos and U2_1 < 1 else 0",
-                       {"U2_1":1}, "U2_1 binding")
+        s.add_reaction("u2_1_br * Intr1",
+                      {"U2_1":[1,0], "Intr1": [-1,1],
+                        "Pol_pos":["-u2_1_bs_pos", "u2_1_bs_pos"]},
+                       "U2_1 binding")
         s.add_reaction("u2_1_ur * U2_1", {"U2_1":-1}, "U2_1 diss.")
         
-        s.add_reaction("u2_2_br * Intr2 if Pol_pos > u2_2_bs_pos and U2_2 < 1 else 0",
-                       {"U2_2":1}, "U2_2 binding")
+        s.add_reaction("u2_2_br * Intr2",
+                       {"U2_2":[1,0], "Intr2": [-1,1],
+                        "Pol_pos":["-u2_2_bs_pos", "u2_2_bs_pos"]},
+                        "U2_2 binding")
         s.add_reaction("u2_2_ur * U2_2", {"U2_2":-1}, "U2_2 diss.")
         
         #Splicing
         s.add_reaction("U1_1 * U2_1 * Intr1 * spl_rate",
-                       {"Intr1":-1, "U1_1":-1, "U2_1":-1, "Intr1_ex":1},
+                       {"Intr1":-1, "U1_1":-1, "U2_1":-1,
+                        "nascRNA_bc": "-u1_2_bs_pos - u1_1_bs_pos"},
                        name="Intron 1 excision")
         s.add_reaction("U1_2 * U2_2 * Intr2 * spl_rate",
-                       {"Intr2":-1, "U1_2":-1, "U2_2":-1, "Intr2_ex":1},
+                       {"Intr2":-1, "U1_2":-1, "U2_2":-1,
+                        "nascRNA_bc": "-u2_2_bs_pos - u2_1_bs_pos"},
                        name="Intron 2 excision")
-        s.add_reaction("U1_1 * U2_2 * Intr1 * Intr2 * Exon1 * spl_rate",
-                       {"Intr1":-1, "Intr2":-1, "Exon1":-1, "U1_1":-1, "U2_2":-1, "Exon1_ex":1, "Intr1_ex":1, "Intr2_ex":1},
+        s.add_reaction("U1_1 * U2_2 * spl_rate",
+                       {"Intr1":-1, "Intr2":-1, "Exon1":-1,
+                        "nascRNA_bc": "-u2_2_bs_pos - u1_1_bs_pos",
+                        "U1_1":-1, "U2_2":-1, "U1_2":"-U1_2", "U2_1":"-U2_1"},
                        name="Exon 1 excision (inclusion)")
         
         #Transcription termination
-        s.add_reaction("tr_term_rate * Exon1_ex * Intr1_ex * Intr2_ex if Tr_dist == 0 else 0",
-                       {"Exon1_ex":-1, "Intr1_ex":-1, "Intr2_ex":-1, "Skip":1,
-                        "Pol_pos": -gene_len, "Pol_on":-1, "Pol_off":1},
+        s.add_reaction("tr_term_rate",
+                       {"Intr1":0, "Intr2":0, "Exon1":0,
+                        "Skip":1, "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1},
                        name = "Termination: skipping")
-        s.add_reaction("tr_term_rate * Exon1 * Intr1_ex * Intr2_ex if Tr_dist == 0 else 0",
-                       {"Exon1":-1, "Intr1_ex":-1, "Intr2_ex":-1, "Incl":1,
-                        "Pol_pos": -gene_len, "Pol_on":-1, "Pol_off":1},
+        s.add_reaction("tr_term_rate",
+                       {"Intr1":0, "Intr2":0, "Exon1":-1, "Incl":1,
+                        "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1},
                        name = "Termination: inclusion")
-        s.add_reaction("tr_term_rate * Exon1 * Intr1_ex * Intr2 if Tr_dist == 0 else 0",
-                       {"Exon1":-1, "Intr1_ex":-1, "Intr2":-1, "ret_i2":1,
-                        "Pol_pos": -gene_len, "Pol_on":-1, "Pol_off":1},
-                       name = "Termination: Intron 1 retention")
-        s.add_reaction("tr_term_rate * Exon1 * Intr1 * Intr2_ex if Tr_dist == 0 else 0",
-                       {"Exon1":-1, "Intr1":-1, "Intr2_ex":-1, "ret_i1":1,
-                        "Pol_pos": -gene_len, "Pol_on":-1, "Pol_off":1},
-                       name = "Termination: Intron 2 retention")
-        s.add_reaction("tr_term_rate * Exon1 * Intr1 * Intr2 if Tr_dist == 0 else 0",
+        s.add_reaction("tr_term_rate",
+                       {"Exon1":-1, "Intr1":-1, "Intr2":0, "ret_i2":1,
+                        "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1,
+                        "U1_1":"-U1_1", "U2_1": "-U2_1"},
+                       name = "Termination: ret i1")
+        s.add_reaction("tr_term_rate",
+                       {"Exon1":-1, "Intr2":-1, "Intr1":0, "ret_i2":1,
+                        "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1,
+                        "U1_2":"-U1_2", "U2_2": "-U2_2"},
+                       name = "Termination: ret i2")
+        s.add_reaction("tr_term_rate",
                        {"Exon1":-1, "Intr1":-1, "Intr2":-1, "ret":1,
-                        "Pol_pos": -gene_len, "Pol_on":-1, "Pol_off":1},
+                        "Pol_pos": -gene_len, "Pol_on":-1, "Pol_off":1,
+                        "U1_1":"-U1_1", "U2_1": "-U2_1","U1_2":"-U1_2", "U2_2": "-U2_2"},
                        name = "Termination: full retention")
-        # Free Ux sites after/befor transcription. Very ugly workaround
-        s.add_reaction("Pol_off * U1_1 * Ux_clear_rate", {"U1_1":-1}, "Clearing...")
-        s.add_reaction("Pol_off * U1_2 * Ux_clear_rate", {"U1_2":-1}, "Clearing...")
-        s.add_reaction("Pol_off * U2_1 * Ux_clear_rate", {"U2_1":-1}, "Clearing...")
-        s.add_reaction("Pol_off * U2_2 * Ux_clear_rate", {"U2_2":-1}, "Clearing...")
          
+        #Posttranscriptional reactions
 #        s.add_reaction("d0 * mRNA", {"mRNA": -1})
         s.add_reaction("1/(3/(u1_1_br+u2_1_br)  + 3/(u1_2_br+u2_2_br) + 2/(spl_rate)) * ret", {"ret": -1, "Incl": 1}, "PostTr. Incl")
         s.add_reaction("1/(3/(u1_1_br+u2_2_br)  + 1/(spl_rate)) * ret", {"ret": -1, "Skip": 1}, "PostTr. Skip")
@@ -1686,7 +1729,6 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                         if Pol_pos > u2_1_bs_pos and U2_1 < 1 else 0", {"U2_1":1, "U2_Pol":-1}, "U2onPol to nascRNA")
         s.add_reaction("U2_Pol * Intr2 * u2pol_br * (1-1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_2_bs_pos))**2) \
                         if Pol_pos > u2_2_bs_pos and U2_2 < 1 else 0", {"U2_2":1, "U2_Pol":-1}, "U2onPol to nascRNA")
-        s.add_reaction("Pol_off * U2_Pol * Ux_clear_rate", {"U2_Pol":-1}, "Clearing...")
         
 #        s.add_reaction()
         
