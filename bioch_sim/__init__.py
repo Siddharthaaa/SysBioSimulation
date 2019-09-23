@@ -38,7 +38,7 @@ from sklearn.cluster import KMeans, MeanShift, k_means
 from numba import cuda
 from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32, xoroshiro128p_uniform_float64
 import random
-drawPetriNets = False
+drawPetriNets = True
 if(drawPetriNets):
     import snakes
     import snakes.plugins
@@ -220,12 +220,22 @@ class SimParam(object):
                 pn.add_transition(pns.Transition(name), cluster=cluster)
             for p, vs in tr["actors"].items():
                 for v in vs:
-                    if(v > 0):
-                        pn.add_output(p, name, pns.Value(v))
+                    if(type(v) is not str):
+                        if(v == 0):
+                            pn.add_input(p, name, pns.Value("inhibition"))
+                        elif(v<0):
+                            pn.add_input(p, name, pns.Value(-v))
+                        else:
+                            pn.add_output(p, name, pns.Value(v))
                     else:
-                        pn.add_input(p, name, pns.Value(-v))
+                        if(v.startswith("-")):
+                            v = v[1:]
+                            pn.add_input(p, name, pns.Value(v)) # Expr. not allowed
+                        else:
+                            pn.add_output(p, name, pns.Expression(v))
         
-        
+        #documentation of attr                
+        #http://www.graphviz.org/doc/info/attrs.html        
         def draw_place (place, attr) :
 #            print(attr)
             attr['label'] = place.name
@@ -236,12 +246,20 @@ class SimParam(object):
                 attr['label'] = trans.name
             else :
                 attr['label'] = '%s\n%s' % (trans.name, trans.guard)
+        def draw_arc(arc, attr):
+            #arrow styles
+            #http://www.graphviz.org/doc/info/attrs.html#k:arrowType
+            if(attr["label"] == " 'inhibition' "):
+                attr["arrowhead"] = "odot"
+            print(attr)
+            print("Arc:", arc)
         if(rotation):
             pn.transpose()
         for e in engine:
             f_name = re.sub("(\.\w+)$", "_"+ e + "\\1", filename)
             pn.draw(f_name, engine = e, place_attr=draw_place,
-                trans_attr=draw_transition , **kwargs)
+                trans_attr=draw_transition ,
+                arc_attr = draw_arc, **kwargs)
         return pn
     
     def compile_system(self, dynamic = True):
@@ -1632,7 +1650,7 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         
         s.add_reaction("pr_on * Pol_off",
                        {"Pol_on":1, "Pol_off": -1,"Exon1":1, "Intr1":1,"Intr2":1,
-                        "Tr_dist": gene_len, "nascRNA_bc": "-nascRNA_bc"},
+                        "Tr_dist": "gene_len", "nascRNA_bc": "-nascRNA_bc"},
                        name = "Transc. initiation")
         
         s.add_reaction("elong_v * Pol_on",
@@ -1689,7 +1707,7 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                         "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1},
                        name = "Termination: inclusion")
         s.add_reaction("tr_term_rate",
-                       {"Exon1":-1, "Intr1":-1, "Intr2":0, "ret_i2":1,
+                       {"Exon1":-1, "Intr1":-1, "Intr2":0, "ret_i1":1,
                         "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1,
                         "U1_1":"-U1_1", "U2_1": "-U2_1"},
                        name = "Termination: ret i1")
@@ -1700,7 +1718,7 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                        name = "Termination: ret i2")
         s.add_reaction("tr_term_rate",
                        {"Exon1":-1, "Intr1":-1, "Intr2":-1, "ret":1,
-                        "Pol_pos": -gene_len, "Pol_on":-1, "Pol_off":1,
+                        "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1,
                         "U1_1":"-U1_1", "U2_1": "-U2_1","U1_2":"-U1_2", "U2_2": "-U2_2"},
                        name = "Termination: full retention")
          

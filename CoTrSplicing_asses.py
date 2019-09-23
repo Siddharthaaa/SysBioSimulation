@@ -75,7 +75,7 @@ s.plot_par_var_1d("elong_v", np.linspace(20,200,10),None, s.get_psi_mean)
     
 s = bs.get_exmpl_sim("CoTrSplicing")
 s.set_runtime(40000)
-pars = {"elong_v": np.linspace(10,200,30), "u1_2_br": np.linspace(0.001,0.02, 40)}
+pars = {"elong_v": np.linspace(10,200,30), "u1_2_br": np.linspace(0.001,0.02, 20)}
 res = s.plot_par_var_2d(pars, None, s.get_psi_mean, ignore_fraction=0.8)
 
 
