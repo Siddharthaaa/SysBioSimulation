@@ -5,6 +5,8 @@ Created on Tue Mar 26 08:45:28 2019
 @author: imb30
 """
 
+import os
+
 from tkinter import Tk # copy to clipboard function
 from tkinter import filedialog
 import tkinter as tk
@@ -197,20 +199,22 @@ class SimParam(object):
         
     
     def draw_pn(self, filename=None, rates=False, rotation = False,
-                engine=('neato', 'dot', 'circo', 'twopi', 'fdp'), **kwargs):
+                engine=('neato', 'dot', 'circo', 'twopi', 'fdp'),
+                draw_neutral_arcs = True, **kwargs):
         if type(engine) is str:
             engine = (engine,)
         self.compile_system()
         #https://www.ibisc.univ-evry.fr/~fpommereau/SNAKES/API/plugins/gv.html
         if filename is None:
             filename = self.name + ".png"
+            filename = os.path.join("pn_images", filename)
             
         pn = pns.PetriNet(self.name)
         for p, v in self.init_state.items():
             cluster = self._clusters[p] if p in self._clusters else ()
             pn.add_place(pns.Place(p,v), cluster=cluster)
         
-        for tr in self._transitions:
+        for tr, pre, post in zip(self._transitions, self._pre, self._post):
             name = tr["name"]
             cluster = self._clusters[name] if name in self._clusters else ()
             if(rates):
@@ -218,21 +222,45 @@ class SimParam(object):
                                                  cluster = cluster)
             else:
                 pn.add_transition(pns.Transition(name), cluster=cluster)
-            for p, vs in tr["actors"].items():
-                for v in vs:
-                    if(type(v) is not str):
-                        if(v == 0):
-                            pn.add_input(p, name, pns.Value("inhibition"))
-                        elif(v<0):
-                            pn.add_input(p, name, pns.Value(-v))
-                        else:
-                            pn.add_output(p, name, pns.Value(v))
-                    else:
-                        if(v.startswith("-")):
-                            v = v[1:]
-                            pn.add_input(p, name, pns.Value(v)) # Expr. not allowed
-                        else:
-                            pn.add_output(p, name, pns.Expression(v))
+                
+            #creating arcs
+            for pr, pst, subs in zip(pre, post, list(self.init_state)):
+                if(pr == pst and pr != 0): #neutral 
+                    if(draw_neutral_arcs):
+                        v = pns.Value(str(pr))
+                        v._role = "neutral"
+                        pn.add_input(subs, name, v)
+                else:
+                    # ugly stuff starts :(
+                    if(pr == "2*" + subs): #inhibition
+                        v = pns.Value("<inhibits>")
+                        v._role = "inhibition"
+                        pn.add_input(subs, name, v)
+                    elif(pr == subs): #flush
+                        flush = pns.Flush("0")
+                        flush._role = "flush"
+                        pn.add_output(subs, name, flush)
+                    elif(pr != 0):
+                        pn.add_input(subs, name, pns.Value(pr))
+                    if(pst != 0):
+                        pn.add_output(subs, name, pns.Value(pr))
+                    
+                    
+#            for p, vs in tr["actors"].items():
+#                for v in vs:
+#                    if(type(v) is not str):
+#                        if(v == 0):
+#                            pn.add_input(p, name, pns.Value("inhibition"))
+#                        elif(v<0):
+#                            pn.add_input(p, name, pns.Value(-v))
+#                        else:
+#                            pn.add_output(p, name, pns.Value(v))
+#                    else:
+#                        if(v.startswith("-")):
+#                            v = v[1:]
+#                            pn.add_input(p, name, pns.Value(v)) # Expr. not allowed
+#                        else:
+#                            pn.add_output(p, name, pns.Expression(v))
         
         #documentation of attr                
         #http://www.graphviz.org/doc/info/attrs.html        
@@ -249,8 +277,21 @@ class SimParam(object):
         def draw_arc(arc, attr):
             #arrow styles
             #http://www.graphviz.org/doc/info/attrs.html#k:arrowType
-            if(attr["label"] == " 'inhibition' "):
-                attr["arrowhead"] = "odot"
+            if(hasattr(arc, "_role")):
+                if(arc._role == "inhibition"):
+#                    attr["arrowhead"] = "tee"
+                    attr["arrowhead"] = "odot"
+                    attr["label"] = "inhibition"
+                    pass
+                if(arc._role == "flush"):
+#                    attr["arrowhead"] = "odot"
+                    attr["label"] = "0"
+                    attr["arrowhead"] = "empty"
+                    pass
+                if(arc._role == "neutral"):
+                    attr["dir"] = "both"
+                    attr["arrowhead"] = "box"
+                    pass
             print(attr)
             print("Arc:", arc)
         if(rotation):
@@ -288,9 +329,13 @@ class SimParam(object):
                 subs_to_update.append("st[%d]" % (subs_i+1))
                 update = ""
                 for v in react[substance]:
-                    if(v == 0):
+                    if(v is None):
+                        #create inhibition 
                         v = "-2*" + substance
-                    update += " +" + str(v)
+                    elif(v == 0):
+                        # create flush
+                        v = "-" + substance
+                    update += ("" if update == "" else " +") + str(v)
                     if type(v) is str:
                         if v.startswith("-"):
                             v = v[1:]
@@ -304,14 +349,13 @@ class SimParam(object):
                             self._pre[i, subs_i] += -v
                         elif v > 0:
                             self._post[i, subs_i] += v
-                        else:
-                            # Inhibition by 0
-                            self._pre[i, subs_i] = "2*" + substance
+                        
 #                self._reacts[i, names.index(substance)] += sum(react[substance])
                 update = self._sub_vars(update)
                 updates.append(update)
-            update_st_func += "\t" + " ,".join(subs_to_update) + " =" + " ,".join(updates) + "\n"
-            update_st_func += "\treturn None \nself._fire_transition.append(update_st)\n"
+#            update_st_func += "\t" + " ,".join(subs_to_update) + " +=" + " ,".join(updates) + "\n"
+            update_st_func += "\n".join(["\t" + subs + " += " + update for subs, update in zip(subs_to_update, updates)])
+            update_st_func += "\n\treturn None \nself._fire_transition.append(update_st)\n"
             self._fire_transition_str.append(update_st_func)
             exec(update_st_func)
         func_update_pre += "\treturn None \nself._update_pre = update_pre"
@@ -415,16 +459,29 @@ class SimParam(object):
 #            fire_transitions[i]=f_trans
         pre = self.update_pre()
         post = self.update_post()
+        
         sim_st = compute_stochastic_evolution(self._state,
                                               self._constants,
                                               nb.f4(self.runtime),
                                               self._rates_function,
-                                              tuple(self._fire_transition),
                                               self._update_pre,
                                               self._update_post,
                                               pre, post,
                                               np.array(tt, np.float32),
                                               nb.int64(max_steps))
+        
+#        exec_str = """sim_st = compute_stochastic_evolution(self._state,
+#                                              self._constants,
+#                                              nb.f4(self.runtime),
+#                                              self._rates_function,
+#                                              self._update_pre,
+#                                              self._update_post,
+#                                              pre, post,
+#                                              np.array(tt, np.float32),
+#                                              nb.int64(max_steps), """ +\
+#        ", ".join([("self._fire_transition[%d]" % i) for i in range(len(self._fire_transition))]) + ")"
+#        print(exec_str)
+#        exec(exec_str)
         
         if ret_raw:
             results["stochastic"] = sim_st
@@ -1241,9 +1298,9 @@ def get_ODE_delta(x,t,sim):
     return dx
   
 @nb.njit#(nb.f8(nb.f8[:,:], nb.f8[:], nb.f4, nb.f8[:](nb.f8[:],), nb.i4))
-def compute_stochastic_evolution(state, constants, runtime, rate_func, transition_funcs,
+def compute_stochastic_evolution(state, constants, runtime, rate_func,
                                  pre_upd_f, post_upd_f , pre, post, time_steps, max_steps):
-#    transition_funcs = numba.typed.List(transition_funcs)
+#                                 , *transition_funcs):
     STATE = np.zeros((len(time_steps), len(state)),dtype=np.float64)
 #    print(state.dtype)
 #    state= np.array(state, dtype = np.int64)
@@ -1532,7 +1589,7 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
     elif(name == "test"):
         params = {"p1":1, "p2":2, "p3":3, "degr":100}
         s = SimParam(name, 100,1001, params,
-                     init_state = {"A1": 10, "A2": 15, "A3": 0})
+                     init_state = {"A1": 10, "A2": 15, "A3": None})
         s.simulate_ODE = False
         s.add_reaction("p1*A1", {"A1":-1, "A3":2})
         s.add_reaction("p2*A2", {"A1":1, "A3":1})
@@ -1659,25 +1716,25 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         
         # Ux (un)binding cinetics
         s.add_reaction("u1_1_br * Intr1",
-                       {"U1_1":[1,0], "Intr1": [-1,1],
+                       {"U1_1":[1,None], "Intr1": [-1,1],
                         "Pol_pos":["-u1_1_bs_pos", "u1_1_bs_pos"]},
                        "U1_1 binding")
         s.add_reaction("u1_1_ur * U1_1", {"U1_1":-1}, "U1_1 diss.")
         
         s.add_reaction("u1_2_br * Intr2",
-                       {"U1_2":[1,0], "Intr2": [-1,1],
+                       {"U1_2":[1,None], "Intr2": [-1,1],
                         "Pol_pos":["-u1_2_bs_pos", "u1_2_bs_pos"]},
                         "U1_2 binding")
         s.add_reaction("u1_2_ur * U1_2", {"U1_2":-1}, "U1_2 diss.")
         
         s.add_reaction("u2_1_br * Intr1",
-                      {"U2_1":[1,0], "Intr1": [-1,1],
+                      {"U2_1":[1,None], "Intr1": [-1,1],
                         "Pol_pos":["-u2_1_bs_pos", "u2_1_bs_pos"]},
                        "U2_1 binding")
         s.add_reaction("u2_1_ur * U2_1", {"U2_1":-1}, "U2_1 diss.")
         
         s.add_reaction("u2_2_br * Intr2",
-                       {"U2_2":[1,0], "Intr2": [-1,1],
+                       {"U2_2":[1,None], "Intr2": [-1,1],
                         "Pol_pos":["-u2_2_bs_pos", "u2_2_bs_pos"]},
                         "U2_2 binding")
         s.add_reaction("u2_2_ur * U2_2", {"U2_2":-1}, "U2_2 diss.")
@@ -1699,20 +1756,20 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         
         #Transcription termination
         s.add_reaction("tr_term_rate",
-                       {"Intr1":0, "Intr2":0, "Exon1":0,
+                       {"Intr1":None, "Intr2":None, "Exon1":None,
                         "Skip":1, "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1},
                        name = "Termination: skipping")
         s.add_reaction("tr_term_rate",
-                       {"Intr1":0, "Intr2":0, "Exon1":-1, "Incl":1,
+                       {"Intr1":None, "Intr2":None, "Exon1":-1, "Incl":1,
                         "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1},
                        name = "Termination: inclusion")
         s.add_reaction("tr_term_rate",
-                       {"Exon1":-1, "Intr1":-1, "Intr2":0, "ret_i1":1,
+                       {"Exon1":-1, "Intr1":-1, "Intr2":None, "ret_i1":1,
                         "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1,
                         "U1_1":"-U1_1", "U2_1": "-U2_1"},
                        name = "Termination: ret i1")
         s.add_reaction("tr_term_rate",
-                       {"Exon1":-1, "Intr2":-1, "Intr1":0, "ret_i2":1,
+                       {"Exon1":-1, "Intr2":-1, "Intr1":None, "ret_i2":1,
                         "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1,
                         "U1_2":"-U1_2", "U2_2": "-U2_2"},
                        name = "Termination: ret i2")
@@ -1724,8 +1781,14 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
          
         #Posttranscriptional reactions
 #        s.add_reaction("d0 * mRNA", {"mRNA": -1})
-        s.add_reaction("1/(3/(u1_1_br+u2_1_br)  + 3/(u1_2_br+u2_2_br) + 2/(spl_rate)) * ret", {"ret": -1, "Incl": 1}, "PostTr. Incl")
-        s.add_reaction("1/(3/(u1_1_br+u2_2_br)  + 1/(spl_rate)) * ret", {"ret": -1, "Skip": 1}, "PostTr. Skip")
+        
+#        s.add_reaction("1/(3/(u1_1_br+u2_1_br)  + 3/(u1_2_br+u2_2_br) + 2/(spl_rate)) * ret", {"ret": -1, "Incl": 1}, "PostTr. Incl")
+#        s.add_reaction("1/(3/(u1_1_br+u2_2_br)  + 1/(spl_rate)) * ret", {"ret": -1, "Skip": 1}, "PostTr. Skip")
+        s.add_reaction("((u1_1_br+u2_2_br)/2  + 1/(spl_rate)) * ret", {"ret": -1, "Skip": 1}, "PostTr. ret -> Skip")
+        s.add_reaction("((u1_1_br+u2_1_br)/2  + 1/(spl_rate)) * ret", {"ret": -1, "ret_i2": 1}, "PostTr. ret -> ret_i2")
+        s.add_reaction("((u1_2_br+u2_2_br)/2  + 1/(spl_rate)) * ret", {"ret": -1, "ret_i1": 1}, "PostTr. ret -> ret_i1")
+        s.add_reaction("((u1_2_br+u2_2_br)/2  + 1/(spl_rate)) * ret", {"ret_i2": -1, "Incl": 1}, "PostTr. ret_i2 -> Incl")
+        s.add_reaction("((u1_1_br+u2_1_br)/2  + 1/(spl_rate)) * ret", {"ret_i1": -1, "Incl": 1}, "PostTr. ret_i1 -> Incl")
         s.add_reaction("d1 * Incl", {"Incl": -1}, "Incl degr.")
         s.add_reaction("d2 * Skip", {"Skip": -1}, "Skip degr.")
 #        s.add_reaction("s3 * mRNA", {"mRNA": -1, "ret": 1})

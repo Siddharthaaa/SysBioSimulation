@@ -686,7 +686,7 @@ def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000,
         s.simulate()
         (indx, psis) = s.compute_psi(ignore_extremes=False, recognize_threshold=1,
                                     exact_sum= c if exact_counts else None,
-                                    sim_rnaseq=sim_rnaseq)
+                                    sim_rnaseq=sim_rnaseq, ignore_fraction=0.7)
         if var_stab:
             psis = np.arcsin(np.sqrt(psis))
         res[i] = np.nanstd(psis, ddof=1)
@@ -806,6 +806,10 @@ def filter_assumed_hkg(df = None, psi = (0.2, 0.8), counts_max_cv = 0.2,
     
     
     return df_t.iloc[indx]
+
+def norm_dist(x, a , r=1 , p=2):
+    dist = abs(x-a)
+    return 1 - (1/(1+(dist/r)**p))
     
 if __name__ == "__main__":
     None

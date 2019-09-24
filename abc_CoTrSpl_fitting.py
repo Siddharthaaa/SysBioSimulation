@@ -25,48 +25,48 @@ import bioch_sim as bs
 import glob
 
 
-v0 = 55
-v1 = 6
-v2 = 4.5
+v0 = 50
 spl_r = 0.031
 
 s = bs.get_exmpl_sim("CoTrSplicing")
 #s.set_param("spl_rate",2)
-s.set_param("u1_1_br", v1)
-s.set_param("u1_2_br", v1)   
-s.set_param("u2_1_br", v2)
-s.set_param("u2_2_br", v2)
-s.set_param("spl_rate", 0.04)
+s.set_param("u1_1_br", 0.03)
+s.set_param("u1_2_br", 0.1)   
+s.set_param("u2_1_br", 0.02)
+s.set_param("u2_2_br", 0.05)
+s.set_param("spl_rate", 0.05)
 s.set_param("elong_v", v0)
-s.set_runtime(30000)
+s.set_runtime(50000)
 
 psis = []
-for i in range(100):
+for i in range(2):
     s.simulate()
     psis.append(s.get_psi_mean(ignore_fraction=0.5))
 
-print(np.median(psis))
+print(np.mean(psis))
 
 #s.plot_course(products=["Skip","Incl", "ret", "ret_i1"], res = ["stoch"])
 #s.plot_course(products=["U2_Pol", "U2_2"], res = ["stoch"])
 s.get_psi_mean(ignore_fraction = 0.5)
 
 def model(parameters):
-    v1 = parameters["v1"]
-    v2 = parameters["v2"]
-    v0 = parameters["v0"]
+    v1 = parameters["u1_2_br"]
+    v2 = parameters["u2_1_br"]
+    v3 = parameters["u2_2_br"]
     spl_r = parameters["spl_r"]
-    s.set_param("u1_1_br", v1)
-    s.set_param("u1_2_br", v2)
+#    s.set_param("u1_1_br", v1)
+    s.set_param("u1_2_br", v1)
     s.set_param("u2_1_br", v2)
-    s.set_param("u2_2_br", v1)
-    s.set_param("elong_v", v0)
+    s.set_param("u2_2_br", v3)
+#    s.set_param("elong_v", v0)
     s.set_param("spl_rate", spl_r)
     s.simulate()
-    res = s.get_psi_mean(ignore_fraction = 0.8)
-    if np.isnan(res):
-        res = 0
-    return {"y": res}
+    psi = s.get_psi_mean(ignore_fraction = 0.7)
+    if np.isnan(psi):
+        psi= 0
+    counts = np.mean(s.get_res_from_expr("Incl+Skip")[-3000:])
+    ret_total = np.mean(s.get_res_from_expr("ret + ret_i1 + ret_i2")[-3000:])
+    return {"PSI": psi, "counts": counts, "ret_total":ret_total}
 
 models = [model]
 
@@ -77,7 +77,15 @@ class y_Distance(pa.Distance):
             x_0: dict,
             t: int = None,
             par: dict = None) -> float:
-        res = np.abs(x["y"] - x_0["y"])
+        counts = x["counts"]
+        counts_0 = x_0["counts"]
+        counts_d = sth.norm_dist(counts, counts_0, 5, 3)
+        ret = x["ret_total"]
+        ret_0 = x_0["ret_total"]
+        ret_d = sth.norm_dist(ret, ret_0, ret_0/5, 3)
+        psi_d = abs(x_0["PSI"] - x["PSI"])
+        
+        res = ret_d + counts_d + psi_d
         return res
             
 
@@ -85,10 +93,10 @@ class y_Distance(pa.Distance):
 # Their mean differs.
 
 
-limits = dict(v1=(0, 10),
-              v2=(0, 10),
-              v0=(10, 100),
-              spl_r=(0, 0.1))
+limits = dict(u1_2_br=(0.01, 0.3),
+              u2_1_br=(0.001, 0.1),
+              u2_2_br = (0.01, 0.2),
+              spl_r=(0.01, 0.2))
 bound1 = 0.001
 bound2 = 10
 parameter_priors = pa.Distribution(**{key: pa.RV("beta", 2, 2, a, b - a)
@@ -102,19 +110,19 @@ abc = pa.ABCSMC(
     models, parameter_priors,
     y_Distance(),
     population_size=100,
-    sampler=pa.sampler.MulticoreEvalParallelSampler(10))
+    sampler=pa.sampler.MulticoreEvalParallelSampler(14))
 abc.max_number_particles_for_distance_update = 100
 
 # y_observed is the important piece here: our actual observation.
 # search for psi == 0.5
-y_observed = 0.5
+y_observed = {"counts": 50, "PSI": 0.5, "ret_total":10}
 # and we define where to store the results
 
 db_dir = tempfile.gettempdir()
 db_dir = "./"
 db_path = ("sqlite:///" +
            os.path.join(db_dir, "test.db"))
-abc_id = abc.new(db_path, {"y": y_observed})
+abc_id = abc.new(db_path, y_observed)
 
 print("ABC-SMC run ID:", abc_id)
 

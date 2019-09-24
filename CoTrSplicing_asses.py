@@ -33,10 +33,10 @@ s = bs.get_exmpl_sim("CoTrSplicing")
 #s = bs.get_exmpl_sim("test")
 s.compile_system()
 #s.draw_pn(rates=False)
-s.set_runtime(10000)
+s.set_runtime(100000)
 s.show_interface()
 s.compile_system()
-v2s = np.linspace(0.1, 5, 40)
+v2s = np.linspace(0.1, 2, 30)
 psis = []
 ret_total = []
 for v2 in v2s:
@@ -74,7 +74,7 @@ s.plot_par_var_1d("elong_v", np.linspace(20,200,10),None, s.get_psi_mean)
 
     
 s = bs.get_exmpl_sim("CoTrSplicing")
-s.set_runtime(40000)
+s.set_runtime(80000)
 pars = {"elong_v": np.linspace(10,200,30), "u1_2_br": np.linspace(0.001,0.02, 20)}
 res = s.plot_par_var_2d(pars, None, s.get_psi_mean, ignore_fraction=0.8)
 
@@ -83,6 +83,7 @@ s = bs.get_exmpl_sim("CoTrSplicing")
 s.set_runtime(60000)
 s.set_param("elong_v", 50)
 psi_means =[]
+
 psis = []
 res = []
 ret = []
@@ -112,7 +113,8 @@ res_stds = [np.std(r[-3000:]) for r in res]
 ret_means = [np.mean(r[-3000:]) for r in ret]
 reti1_means = [np.mean(r[-3000:]) for r in reti1]
 reti2_means = [np.mean(r[-3000:]) for r in reti2]
-psi_stds = [np.std(r) for r in psis]
+psi_stds = [np.std(r[-3000:]) for r in psis]
+psi_stds_stabl = [np.std(np.arcsin(np.sqrt(r[-3000:]))) for r in psis]
 
 incl_means = [np.mean(r[-3000:]) for r in incl]
 incl_stds = [np.std(r[-3000:]) for r in incl]
@@ -127,10 +129,37 @@ ax.scatter(psi_means, ret_means, label ="ret")
 ax.scatter(psi_means, reti1_means, label ="ret_i1")
 ax.scatter(psi_means, reti2_means, label ="ret_i2")
 
+
 ax.set_xlabel("PSI")
 ax.set_ylabel("#")
 ax.set_title("By variation of v2")
 ax.legend()
+counts = np.add(incl_means, skip_means)
+psi_std_basic_model = sth.tmp_simulate_std_gillespie(counts, psi_means, var_stab=False)
+psi_std_basic_model_stabl = sth.tmp_simulate_std_gillespie(counts, psi_means, var_stab=True)
+
+fig = plt.figure(fig_size=(5,15))
+ax = fig.add_subplot(1,3,1)
+ax.scatter(psi_stds, psi_std_basic_model)
+ax.set_xlabel("CoTranscr. Splicing: std(PSI)")
+ax.set_ylabel("Basic Spl. model: std(PSI)")
+ax.set_title("Same counts and PSIs")
+std_max = max(psi_std_basic_model)
+std_max *= 1.1
+ax.plot([0,std_max], [0, std_max], c = "red")
+
+ax = fig.add_subplot(1,3,2)
+ax.set_title("counts dependency")
+ax.set_xlable("counts")
+ax.set_ylable("$\Delta STD(PSI)$")
+ax.plot(counts, np.subtract(psi_stds, psi_std_basic_model))
+
+
+ax = fig.add_subplot(1,3,3)
+ax.set_title("PSI dependency")
+ax.set_xlable("PSI")
+ax.set_ylable("$\Delta STD(PSI)$")
+ax.plot(counts, np.subtract(psi_stds, psi_std_basic_model))
 
 
 fig = plt.figure()
