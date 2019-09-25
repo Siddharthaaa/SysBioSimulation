@@ -25,48 +25,71 @@ import bioch_sim as bs
 import glob
 
 
-v0 = 50
+v0 = 100
 spl_r = 0.031
 
 s = bs.get_exmpl_sim("CoTrSplicing")
 #s.set_param("spl_rate",2)
 s.set_param("u1_1_br", 0.03)
-s.set_param("u1_2_br", 0.1)   
-s.set_param("u2_1_br", 0.02)
-s.set_param("u2_2_br", 0.05)
-s.set_param("spl_rate", 0.05)
+s.set_param("u1_2_br", 0.16)   
+s.set_param("u2_1_br", 0.086)
+s.set_param("u2_2_br", 0.152)
+s.set_param("spl_rate", 0.136)
+s.set_param("d1", 2.2e-4)
+s.set_param("d2", 2.2e-4)
 s.set_param("elong_v", v0)
-s.set_runtime(50000)
 
-psis = []
-for i in range(2):
-    s.simulate()
-    psis.append(s.get_psi_mean(ignore_fraction=0.5))
 
-print(np.mean(psis))
 
+s.set_runtime(80000)
+#
+#psis = []
+#for i in range(100):
+#    s.simulate()
+#    psis.append(s.get_psi_mean(ignore_fraction=0.5))
+#
+#print(np.mean(psis))
+#
 #s.plot_course(products=["Skip","Incl", "ret", "ret_i1"], res = ["stoch"])
 #s.plot_course(products=["U2_Pol", "U2_2"], res = ["stoch"])
-s.get_psi_mean(ignore_fraction = 0.5)
+#s.get_psi_mean(ignore_fraction = 0.5)
+
+
+messured_points = 5
+v0s = np.linspace(20,100,messured_points)
+runtimes = np.linspace(100000, 20000, messured_points, dtype = int)
+
 
 def model(parameters):
     v1 = parameters["u1_2_br"]
     v2 = parameters["u2_1_br"]
     v3 = parameters["u2_2_br"]
     spl_r = parameters["spl_r"]
+    d = parameters["d"]
 #    s.set_param("u1_1_br", v1)
     s.set_param("u1_2_br", v1)
     s.set_param("u2_1_br", v2)
     s.set_param("u2_2_br", v3)
-#    s.set_param("elong_v", v0)
+    s.set_param("d1", d)
+    s.set_param("d2", d)
     s.set_param("spl_rate", spl_r)
-    s.simulate()
-    psi = s.get_psi_mean(ignore_fraction = 0.7)
-    if np.isnan(psi):
-        psi= 0
-    counts = np.mean(s.get_res_from_expr("Incl+Skip")[-3000:])
-    ret_total = np.mean(s.get_res_from_expr("ret + ret_i1 + ret_i2")[-3000:])
-    return {"PSI": psi, "counts": counts, "ret_total":ret_total}
+#    s.set_param("elong_v", v0)
+    psis =[]
+    counts =[]
+    ret_t = []
+    for v0, r_time in zip(v0s, runtimes):
+        s.set_param("elong_v", v0)
+        s.set_runtime(r_time)
+        s.simulate()
+        psi = s.get_psi_mean(ignore_fraction = 0.7)
+        if np.isnan(psi):
+            psi= 0
+        psis.append(psi)
+        counts.append(np.mean(s.get_res_from_expr("Incl+Skip")[-3000:]))
+        ret_t.append(np.mean(s.get_res_from_expr("ret + ret_i1 + ret_i2")[-3000:]))
+    return {"PSI": np.array(psis),
+            "counts": np.array(counts),
+            "ret_total":np.array(ret_t)}
 
 models = [model]
 
@@ -79,13 +102,13 @@ class y_Distance(pa.Distance):
             par: dict = None) -> float:
         counts = x["counts"]
         counts_0 = x_0["counts"]
-        counts_d = sth.norm_dist(counts, counts_0, 5, 3)
+        counts_d = sth.norm_dist(counts, counts_0, 5, 2)
         ret = x["ret_total"]
         ret_0 = x_0["ret_total"]
-        ret_d = sth.norm_dist(ret, ret_0, ret_0/5, 3)
-        psi_d = abs(x_0["PSI"] - x["PSI"])
+        ret_d = sth.norm_dist(ret, ret_0, ret_0/5, 2) 
+        psi_d = abs((x_0["PSI"] - x["PSI"]))
         
-        res = ret_d + counts_d + psi_d
+        res = np.linalg.norm(ret_d*0.5 + counts_d + psi_d*2)
         return res
             
 
@@ -96,7 +119,8 @@ class y_Distance(pa.Distance):
 limits = dict(u1_2_br=(0.01, 0.3),
               u2_1_br=(0.001, 0.1),
               u2_2_br = (0.01, 0.2),
-              spl_r=(0.01, 0.2))
+              spl_r=(0.01, 0.2),
+              d = (1e-5,1e-3))
 bound1 = 0.001
 bound2 = 10
 parameter_priors = pa.Distribution(**{key: pa.RV("beta", 2, 2, a, b - a)
@@ -110,12 +134,14 @@ abc = pa.ABCSMC(
     models, parameter_priors,
     y_Distance(),
     population_size=100,
-    sampler=pa.sampler.MulticoreEvalParallelSampler(14))
+    sampler=pa.sampler.MulticoreEvalParallelSampler(10))
 abc.max_number_particles_for_distance_update = 100
 
 # y_observed is the important piece here: our actual observation.
 # search for psi == 0.5
-y_observed = {"counts": 50, "PSI": 0.5, "ret_total":10}
+y_observed = {"counts": np.linspace(20,100, messured_points),
+              "PSI": np.linspace(1,0, messured_points),
+              "ret_total":np.linspace(4,20,messured_points)}
 # and we define where to store the results
 
 db_dir = tempfile.gettempdir()
@@ -153,3 +179,26 @@ pa.visualization.plot_kde_matrix(df, w, limits=limits)
 
 pa.visualization.plot_sample_numbers(h)
 pa.visualization.plot_epsilons(h)
+
+params = dict(pr_on=2.000000e+00,
+pr_off=1.000000e-01,
+elong_v=5.000000e+01,
+gene_len=3.000000e+03,
+spl_rate=7.100000e-02,
+u1_1_bs_pos=1.500000e+02,
+u1_2_bs_pos=1.700000e+03,
+u1_1_br=3.000000e-02,
+u1_1_ur=1.000000e-03,
+u1_2_br=1.620000e-01,
+u1_2_ur=1.000000e-03,
+u2_1_bs_pos=1.500000e+03,
+u2_2_bs_pos=2.800000e+03,
+u2_1_br=3.900000e-02,
+u2_2_br=1.020000e-01,
+u2_1_ur=1.000000e-03,
+u2_2_ur=1.000000e-03,
+tr_term_rate=1.000000e+02,
+d0=2.000000e-04,
+d1=2.000000e-04,
+d2=2.000000e-04,
+d3=1.000000e-03)

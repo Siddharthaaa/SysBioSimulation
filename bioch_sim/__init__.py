@@ -253,10 +253,6 @@ class SimParam(object):
                         pn.add_input(subs, name, pns.Value(pr))
                     if(pst != 0):
                         pn.add_output(subs, name, pns.Value(pst))
-<<<<<<< HEAD
-                    
-=======
->>>>>>> refs/remotes/origin/generalized_spn
                     
          
         #documentation of attr                
@@ -1073,6 +1069,11 @@ class SimInterface(tk.Frame):
         self.columnconfigure(3, pad=7)
         self.rowconfigure(3, weight=1)
         self.rowconfigure(5, pad=7)
+        
+        f_settings = tk.Frame(self)
+        f_settings.pack(side = tk.TOP, fill=tk.X)
+        e_runtime = tk.Entry(f_settings)
+        e_runtime.pack(side=tk.LEFT)
         
         f_places = tk.Frame(self)
         f_places.pack(fill=tk.X, side=tk.LEFT)
