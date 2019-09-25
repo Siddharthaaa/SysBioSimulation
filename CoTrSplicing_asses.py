@@ -30,6 +30,11 @@ def get_total_IR(s):
     return np.mean(ir[int(len(ir)/10):])
     
 s = bs.get_exmpl_sim("CoTrSplicing")
+s._clusters={}
+s.draw_pn(#engine="dot",
+          draw_flush_arcs= True,
+          draw_inhibition_arcs=True,
+          draw_neutral_arcs=False)
 #s = bs.get_exmpl_sim("test")
 s.compile_system()
 #s.draw_pn(rates=False)
