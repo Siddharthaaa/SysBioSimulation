@@ -243,7 +243,7 @@ class SimParam(object):
                     elif(pr != 0):
                         pn.add_input(subs, name, pns.Value(pr))
                     if(pst != 0):
-                        pn.add_output(subs, name, pns.Value(pr))
+                        pn.add_output(subs, name, pns.Value(pst))
                     
                     
 #            for p, vs in tr["actors"].items():
@@ -800,6 +800,7 @@ class SimParam(object):
         for k,v  in self.params.items():
             expr = re.sub("\\b" + k + "\\b", "%e" % v, expr)                
         expr = "lambda " + ", ".join(args) + ": ("   + expr +")"
+        print(expr)
         f = eval(expr)
         f = np.vectorize(f, otypes=[np.float] )
         res = f(*arg_vals)
@@ -1085,7 +1086,8 @@ class SimInterface(tk.Frame):
         self._show_sp = []
         i = 0
         p_labels = []
-        self.p_entries = {}
+        self.par_entries = {}
+        self.pl_entries = {}
         for k, v in sim.params.items():
 #            row = tk.Frame(f_params)
 #            row.pack(side=tk.TOP, fill=tk.X, padx = 1, pady=1)
@@ -1095,7 +1097,7 @@ class SimInterface(tk.Frame):
             entr.insert(0,v)
             entr.grid(row=i, column=1)
             entr.bind('<Return>', lambda e: self.update(True) ) 
-            self.p_entries[k]= entr
+            self.par_entries[k]= entr
             i +=1
         self._spezies_checkb = {}
         self._spezies_col_b = {}
@@ -1111,7 +1113,7 @@ class SimInterface(tk.Frame):
             entr = tk.Entry(f_places, width=4)
             entr.insert(0,v)
             entr.grid(row=i, column=1)
-            self.p_entries[k]= entr
+            self.pl_entries[k]= entr
             b_col = tk.Button(f_places, height =1, width=1, bg = colors.to_hex(c),
                               command = lambda key=k: self._new_color(key))
             b_col.grid(row=i, column=3)
@@ -1167,7 +1169,7 @@ class SimInterface(tk.Frame):
         
     def fetch_pars(self):
         sim = self.sim
-        for k, e in self.p_entries.items():
+        for k, e in self.par_entries.items():
             v = eval(e.get())
             sim.set_param(k,v)
         
@@ -1684,7 +1686,7 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                 "tr_term_rate": 100,
 #                "s1":s1, "s2":s2, "s3": 1e-4,
                 # http://book.bionumbers.org/how-fast-do-rnas-and-proteins-degrade/
-                "d0":2e-4, "d1": 2e-4, "d2":2e-4, "d3":1e-3 # mRNA half life: 10-20 h -> lambda: math.log(2)/hl
+                "d1": 2e-4, "d2":2e-4, "d3":1e-3 # mRNA half life: 10-20 h -> lambda: math.log(2)/hl
                 }
         
         
