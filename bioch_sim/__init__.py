@@ -200,7 +200,10 @@ class SimParam(object):
     
     def draw_pn(self, filename=None, rates=False, rotation = False,
                 engine=('neato', 'dot', 'circo', 'twopi', 'fdp'),
-                draw_neutral_arcs = True, **kwargs):
+                draw_neutral_arcs = True,
+                draw_inhibition_arcs = True,
+                draw_flush_arcs = True,
+                **kwargs):
         if type(engine) is str:
             engine = (engine,)
         self.compile_system()
@@ -208,13 +211,17 @@ class SimParam(object):
         if filename is None:
             filename = self.name + ".png"
             filename = os.path.join("pn_images", filename)
+            path = os.path.dirname(filename)
+            if(not os.path.exists(path)):
+                os.makedirs(path)
             
         pn = pns.PetriNet(self.name)
-        for p, v in self.init_state.items():
+        for i, (p, v) in enumerate(self.init_state.items()):
             cluster = self._clusters[p] if p in self._clusters else ()
+#            pn.add_place(pns.Place(p,v), cluster=cluster)
             pn.add_place(pns.Place(p,v), cluster=cluster)
         
-        for tr, pre, post in zip(self._transitions, self._pre, self._post):
+        for i, (tr, pre, post) in enumerate(zip(self._transitions, self._pre, self._post)):
             name = tr["name"]
             cluster = self._clusters[name] if name in self._clusters else ()
             if(rates):
@@ -227,41 +234,31 @@ class SimParam(object):
             for pr, pst, subs in zip(pre, post, list(self.init_state)):
                 if(pr == pst and pr != 0): #neutral 
                     if(draw_neutral_arcs):
-                        v = pns.Value(str(pr))
+                        v = pns.Value(pr)
                         v._role = "neutral"
                         pn.add_input(subs, name, v)
                 else:
                     # ugly stuff starts :(
-                    if(pr == "2*" + subs): #inhibition
-                        v = pns.Value("<inhibits>")
-                        v._role = "inhibition"
-                        pn.add_input(subs, name, v)
+                    if(pr == "2*" + subs ): #inhibition
+                        if(draw_inhibition_arcs):
+                            v = pns.Value("<inhibits>")
+                            v._role = "inhibition"
+                            pn.add_input(subs, name, v)
                     elif(pr == subs): #flush
-                        flush = pns.Flush("0")
-                        flush._role = "flush"
-                        pn.add_output(subs, name, flush)
+                        if(draw_flush_arcs):
+                            flush = pns.Flush("0")
+                            flush._role = "flush"
+                            pn.add_output(subs, name, flush)
                     elif(pr != 0):
                         pn.add_input(subs, name, pns.Value(pr))
                     if(pst != 0):
                         pn.add_output(subs, name, pns.Value(pst))
+<<<<<<< HEAD
                     
+=======
+>>>>>>> refs/remotes/origin/generalized_spn
                     
-#            for p, vs in tr["actors"].items():
-#                for v in vs:
-#                    if(type(v) is not str):
-#                        if(v == 0):
-#                            pn.add_input(p, name, pns.Value("inhibition"))
-#                        elif(v<0):
-#                            pn.add_input(p, name, pns.Value(-v))
-#                        else:
-#                            pn.add_output(p, name, pns.Value(v))
-#                    else:
-#                        if(v.startswith("-")):
-#                            v = v[1:]
-#                            pn.add_input(p, name, pns.Value(v)) # Expr. not allowed
-#                        else:
-#                            pn.add_output(p, name, pns.Expression(v))
-        
+         
         #documentation of attr                
         #http://www.graphviz.org/doc/info/attrs.html        
         def draw_place (place, attr) :
@@ -279,28 +276,45 @@ class SimParam(object):
             #http://www.graphviz.org/doc/info/attrs.html#k:arrowType
             if(hasattr(arc, "_role")):
                 if(arc._role == "inhibition"):
-#                    attr["arrowhead"] = "tee"
-                    attr["arrowhead"] = "odot"
+                    attr["arrowhead"] = "tee"
+#                    attr["arrowhead"] = "odot"
+                    attr["style"] = "bold"
                     attr["label"] = "inhibition"
                     pass
                 if(arc._role == "flush"):
 #                    attr["arrowhead"] = "odot"
                     attr["label"] = "0"
                     attr["arrowhead"] = "empty"
+                    attr["style"] = "dashed"
                     pass
                 if(arc._role == "neutral"):
                     attr["dir"] = "both"
-                    attr["arrowhead"] = "box"
+#                    attr["arrowhead"] = "box"
+#                    attr["arrowtail"] = "box"
+                    attr["style"] = "dotted"
+                    attr["arrowhead"] = "ediamond"
+                    attr["arrowtail"] = "ediamond"
                     pass
+        def draw_graph(g, attr):
+            print("AAAAAAAAA", g)
             print(attr)
-            print("Arc:", arc)
+            attr["rotate"] = 0
+            attr["style"] = "dashed"
+            attr["ratio"] = 2
+            attr["rankdir"] = "TB"
+#            attr["bgcolor"] = "#ff0000"
+            attr["label"] = "KOMM SCHON"
         if(rotation):
             pn.transpose()
         for e in engine:
             f_name = re.sub("(\.\w+)$", "_"+ e + "\\1", filename)
-            pn.draw(f_name, engine = e, place_attr=draw_place,
+            pn.draw(f_name, engine = e, debug=True,
+                place_attr=draw_place,
                 trans_attr=draw_transition ,
-                arc_attr = draw_arc, **kwargs)
+                arc_attr = draw_arc,
+                graph_attr = draw_graph,
+                cluster_attr = draw_graph,
+                **kwargs)
         return pn
     
     def compile_system(self, dynamic = True):
