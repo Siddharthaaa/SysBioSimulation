@@ -31,10 +31,10 @@ spl_r = 0.031
 s = bs.get_exmpl_sim("CoTrSplicing")
 #s.set_param("spl_rate",2)
 s.set_param("u1_1_br", 0.03)
-s.set_param("u1_2_br", 0.16)   
-s.set_param("u2_1_br", 0.086)
-s.set_param("u2_2_br", 0.152)
-s.set_param("spl_rate", 0.136)
+s.set_param("u1_2_br", 0.162)   
+s.set_param("u2_1_br", 0.0715)
+s.set_param("u2_2_br", 0.127)
+s.set_param("spl_rate", 0.152)
 s.set_param("d1", 2.2e-4)
 s.set_param("d2", 2.2e-4)
 s.set_param("elong_v", v0)
@@ -42,17 +42,15 @@ s.set_param("elong_v", v0)
 
 
 s.set_runtime(80000)
-#
-#psis = []
-#for i in range(100):
-#    s.simulate()
-#    psis.append(s.get_psi_mean(ignore_fraction=0.5))
-#
-#print(np.mean(psis))
-#
-#s.plot_course(products=["Skip","Incl", "ret", "ret_i1"], res = ["stoch"])
-#s.plot_course(products=["U2_Pol", "U2_2"], res = ["stoch"])
-#s.get_psi_mean(ignore_fraction = 0.5)
+
+psis = []
+for i in range(10):
+    s.simulate()
+    psis.append(s.get_psi_mean(ignore_fraction=0.5))
+
+print("PSI_mean: ", np.mean(psis))
+
+s.get_psi_mean(ignore_fraction = 0.5)
 
 
 messured_points = 5

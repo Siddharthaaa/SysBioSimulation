@@ -73,7 +73,7 @@ class SimParam(object):
     def __init__(self, name, t=200, discr_points= 1001, params={}, init_state={}):
         self.name = str(name)
         self.runtime = t
-        self.set_raster_count(discr_points)
+        self.set_raster(discr_points)
         self.params=params
         
         self.init_state=init_state
@@ -94,8 +94,10 @@ class SimParam(object):
         self.bimodality = {}    
         self.results={}
         self._constants = np.array(list(self.params.values()))
-    def set_raster_count(self, discr_points):
-        self.raster_len = discr_points
+    def set_raster(self, discr_points=None):
+        if(discr_points is None):
+            discr_points = self.raster_count
+        self.raster_count = discr_points
         self.raster =  sp.linspace(0,self.runtime,int(discr_points))
     def get_all_params(self):
         params = {}
@@ -110,7 +112,7 @@ class SimParam(object):
         return s
     def set_runtime(self, t):
         self.runtime=t
-        self.set_raster_count(self.raster_len)
+        self.set_raster_count(self.raster_count)
         
     def set_state(self, state):
         self._state = state
@@ -946,12 +948,14 @@ class SimParam(object):
         #fig.legend()
         return fig, ax
     
-    def plot_course(self, ax = None, res=["ODE","stoch"], products=[], rng = None,
-                    line_width=2, scale = 1, plot_mean=False, plot_psi=False):
+    def plot_course(self, ax = None, res=["ODE","stoch"], products=[], products2=[],
+                    t_bounds = (0, np.inf), line_width=2, scale = 1, plot_mean=False,
+                    plot_psi=False, clear = False):
         if ax == None:
             fig, ax = plt.subplots(1, figsize=(10*scale,10*scale))
         
-        tt = self.raster[:rng]
+        indx = np.where((self.raster > t_bounds[0]) * (self.raster < t_bounds[1]))[0]
+        tt = self.raster[indx]
         #st_res =self.get_result("stochastic")
         stoch_res = self.get_result("stoch_rastr")
         ode_res = self.get_result("ODE")
@@ -966,27 +970,32 @@ class SimParam(object):
             index = self.get_res_index(name)
             color = self.colors[index-1]
             if "stoch" in res:
-                lines.append(ax.plot(stoch_res[:rng,0],stoch_res[:rng,index], label = name +"(stoch)",
+                lines.append(ax.plot(stoch_res[indx,0],stoch_res[indx,index], label = name +"(stoch)",
                          color = color, lw = 0.5*line_width,drawstyle = 'steps')[0])
                 
             mean = np.mean(stoch_res[int(len(stoch_res)/3):,index])
             #plot mean of stoch sim
             if plot_mean:
-                ax.plot([0,tt[-1]], [mean,mean], "--", color=color, lw=line_width)
+                ax.plot([tt[0],tt[-1]], [mean,mean], "--", color=color, lw=line_width)
             if "ODE" in res and ode_res is not None:
-                ax.plot(tt,ode_res[:rng,index],"--", color = color, lw = 1.5*line_width, label = name + "(ODE)")
-        
+                ax.plot(tt,ode_res[indx,index],"--", color = color, lw = 1.5*line_width, label = name + "(ODE)")
         #ax.yaxis.set_label_coords(-0.28,0.25)
+        if len(products2)>0:
+            if type(products2) is str:
+                products2 = [products2]
+            ax_2 = ax.twinx()
+            ax_2 = self.plot_course(ax = ax_2, products=products2, t_bounds = t_bounds, clear=True)
         if(plot_psi):
             ax_psi = ax.twinx()
             (indx, psis) = self.compute_psi()
             ax_psi.plot(self.raster[indx], psis, ".", markersize=line_width*5, label = "PSI")
             ax_psi.set_ylabel("PSI")
-        ax.set_ylabel(self.param_str("\n"), rotation=0, fontsize="large" )
-#        ax.set_ylabel("#")
-        ax.set_xlabel("time",fontsize="large" )
-        ax.set_title(self.name)
-        ax.legend()
+        if(not clear):
+            ax.set_ylabel(self.param_str("\n"), rotation=0, fontsize="large" )
+    #        ax.set_ylabel("#")
+            ax.set_xlabel("time",fontsize="large" )
+            ax.set_title(self.name)
+            ax.legend()
         return ax
     
     def plot_cuda(self, **kwargs):
@@ -1070,11 +1079,8 @@ class SimInterface(tk.Frame):
         self.rowconfigure(3, weight=1)
         self.rowconfigure(5, pad=7)
         
-        f_settings = tk.Frame(self)
-        f_settings.pack(side = tk.TOP, fill=tk.X)
-        e_runtime = tk.Entry(f_settings)
-        e_runtime.pack(side=tk.LEFT)
-        
+        f_settings = self._create_settings_f(self, sim)
+        f_settings.pack(side=tk.TOP, fill=tk.X)
         f_places = tk.Frame(self)
         f_places.pack(fill=tk.X, side=tk.LEFT)
         
@@ -1149,7 +1155,27 @@ class SimInterface(tk.Frame):
         b_update = tk.Button(f_control, text="Update",
                              command = lambda: self.update(True))
         b_update.pack(side=tk.RIGHT)
-    
+    def _create_settings_f(self, master,sim):
+        self._setting_e ={}
+        #common settings frame
+        f_settings = tk.Frame(self)
+        l_runtime  = tk.Label(f_settings,text = "runtime:" )
+        l_runtime.grid(row=0, column=0)
+        l_raster = tk.Label(f_settings, text = "raster:")
+        l_raster.grid(row=1, column=0)
+        
+        e_runtime = tk.Entry(f_settings)
+        e_runtime.insert(0,str(sim.runtime))
+        e_runtime.bind('<Return>', lambda e: self.update(True) ) 
+        e_runtime.grid(row=0, column=1)
+        self._setting_e["runtime"] = e_runtime
+        
+        e_raster = tk.Entry(f_settings)
+        e_raster.insert(0,str(sim.raster_count))
+        e_raster.bind('<Return>', lambda e: self.update(True)) 
+        e_raster.grid(row=1, column=1)
+        self._setting_e["raster_count"] = e_raster
+        return f_settings
     def _new_color(self, name):
         b_c = self._spezies_col_b[name]
         col_new = askcolor(b_c.cget("bg"))[1]
@@ -1171,9 +1197,15 @@ class SimInterface(tk.Frame):
         self.fetch_places()
         if(sim):
             self.fetch_pars()
+            self.fetch_settings()
             self.sim.simulate()
         print("update..")
         self._plot_sim()
+    def fetch_settings(self):
+        sim = self.sim
+        for k, v in self._setting_e.items():
+            sim.__dict__[k] = eval(v.get())
+        sim.set_raster()
         
     def fetch_places(self):
         sim = self.sim
