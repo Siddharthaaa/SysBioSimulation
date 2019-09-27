@@ -8,6 +8,7 @@ Created on Tue Mar 26 08:45:28 2019
 import os
 
 from tkinter import Tk # copy to clipboard function
+from tkinter import ttk
 from tkinter import filedialog
 import tkinter as tk
 from tkinter.colorchooser import askcolor
@@ -80,7 +81,7 @@ class SimParam(object):
         self.simulate_ODE = False
         self._rate_funcs =[]
         self._reactions =[]
-        self._transitions = []
+        self._transitions = {}
         self.id=id(self)
         self._is_compiled = False
         self._dynamic_compile = False
@@ -112,7 +113,7 @@ class SimParam(object):
         return s
     def set_runtime(self, t):
         self.runtime=t
-        self.set_raster_count(self.raster_count)
+        self.set_raster(self.raster_count)
         
     def set_state(self, state):
         self._state = state
@@ -125,8 +126,8 @@ class SimParam(object):
             if type(reaction[k]) is not list:
                 reaction[k] = [reaction[k]]
         
-        self._transitions.append(dict(name=name, rate=rate_func,
-                                      actors = reaction))
+        self._transitions[name] = dict(rate=rate_func,
+                                      actors = reaction)
         
         for name in reaction.keys():
             if not name in self.init_state.keys():
@@ -223,8 +224,9 @@ class SimParam(object):
 #            pn.add_place(pns.Place(p,v), cluster=cluster)
             pn.add_place(pns.Place(p,v), cluster=cluster)
         
-        for i, (tr, pre, post) in enumerate(zip(self._transitions, self._pre, self._post)):
-            name = tr["name"]
+        for i, (tr_name, pre, post) in enumerate(zip(self._transitions.keys(), self._pre, self._post)):
+            name = tr_name
+            tr = self._transitions[tr_name]
             cluster = self._clusters[name] if name in self._clusters else ()
             if(rates):
                 pn.add_transition(pns.Transition(name, pns.Expression(tr["rate"])),
@@ -388,8 +390,7 @@ class SimParam(object):
         func_str+= "def _r_f_(st, pars, _r_s, _pre):\n"
 #        func_str+= "\t_r_s=np.zeros(%d)\n" % len(self._r_s)
         func_str+= "\tt=st[0]\n"
-
-        for i, func in enumerate(self._rate_funcs):
+        for i, (func, tr) in enumerate(zip(self._rate_funcs, self._transitions.values())):
             v_to_chek =[]
             for j, v in enumerate(self._pre[i]):
                 if(v != 0):
@@ -398,9 +399,11 @@ class SimParam(object):
                     v_to_chek.append("_pre[%d,%d] " % (i,j) + " <= st[%d]" % (j+1))
             
             if len(v_to_chek) > 0:
-                func_str += "\t_r_s[%d] = (" %i + func + ") if (" + ") and (".join(v_to_chek) + ") else 0" + "\n"
-            else:
-                func_str += "\t_r_s[%d] = " %i + func  + "\n"
+                func = "(" + func + ") if (" + ") and (".join(v_to_chek) + ") else 0" + "\n"
+#                func_str += "\t_r_s[%d] = (" %i + func + ") if (" + ") and (".join(v_to_chek) + ") else 0" + "\n"
+#            self._rate_funcs_extended.append(func)
+            tr["rate_ex"] = func
+            func_str += "\t_r_s[%d] = " %i + func  + "\n"
         
         func_str = self._sub_vars(func_str, par_name = "pars", place_name="st", dynamic=dynamic)
         func_str += "\treturn _r_s \n"
@@ -793,21 +796,14 @@ class SimParam(object):
            return self.get_result("stoch_rastr")[:, self.get_res_index(name)]
        return self.get_result("ODE")[:, self.get_res_index(name)]
    
-    def get_res_from_expr(self, expr):
-#        for k,v  in self.init_state.items():
-#            expr = re.sub("\\b" + k + "\\b", "self.get_res_col(\"%s\")" % k, expr)
-#        
-#        for k,v  in self.params.items():
-#            expr = re.sub("\\b" + k + "\\b", "%e" % v, expr)
-#        print("try to eval: " + expr)
-#        res = eval(expr)
-#        
-        args = []
+    def get_res_from_expr(self, expr, t_bounds=(0,np.inf)):
+        args = ["_pre", "_post"]
         arg_vals = []
+        indx = np.where((self.raster > t_bounds[0]) * (self.raster < t_bounds[1]))[0]
         for k,v  in self.init_state.items():
             if(re.search("\\b" + k + "\\b", expr) is not None):
                 args.append(k)
-                arg_vals.append(self.get_res_col(k))
+                arg_vals.append(self.get_res_col(k)[indx])
 #        print(args)
         for k,v  in self.params.items():
             expr = re.sub("\\b" + k + "\\b", "%e" % v, expr)                
@@ -827,8 +823,9 @@ class SimParam(object):
         self.compute_psi(**kwargs)
         return np.mean(self.results["PSI"][1])
     def get_res_index(self, name):
+        if name not in self.init_state.keys():
+            return None
         return list(self.init_state.keys()).index(name) +1
-    
     def compute_psi(self, products = ["Incl", "Skip"], solution="stoch_rastr",
                     ignore_extremes = False, ignore_fraction=0.1, recognize_threshold = 1,
                     exact_sum = None, sim_rnaseq = None):
@@ -899,7 +896,8 @@ class SimParam(object):
             return [self.get_res_index(products)], colors
         for name in products:
             index = self.get_res_index(name)
-            indices.append(index)
+            if(index is not None):
+                indices.append(index)
         return indices, self.colors
     
     def _get_color(self, name = None):
@@ -953,18 +951,26 @@ class SimParam(object):
                     plot_psi=False, clear = False):
         if ax == None:
             fig, ax = plt.subplots(1, figsize=(10*scale,10*scale))
-        
+            
+        if type(products) == str:
+            products = [products]
         indx = np.where((self.raster > t_bounds[0]) * (self.raster < t_bounds[1]))[0]
         tt = self.raster[indx]
         #st_res =self.get_result("stochastic")
         stoch_res = self.get_result("stoch_rastr")
         ode_res = self.get_result("ODE")
-       
-        lines = []
         if len(products) == 0:
             products = list(self.init_state.keys())
+        #separate Species and Expressions
+        exprs = []
+        for prod in products.copy():
+            if prod not in self.init_state:
+                exprs.append(prod)
+                products.remove(prod)
+    
+        lines = []
         indices, colors = self._get_indices_and_colors(products)
-        
+        # plot species
         for index in indices:
             name = list(self.init_state.keys())[index-1]
             index = self.get_res_index(name)
@@ -979,6 +985,12 @@ class SimParam(object):
                 ax.plot([tt[0],tt[-1]], [mean,mean], "--", color=color, lw=line_width)
             if "ODE" in res and ode_res is not None:
                 ax.plot(tt,ode_res[indx,index],"--", color = color, lw = 1.5*line_width, label = name + "(ODE)")
+        
+        #plot expressions
+        for i, e in enumerate(exprs):
+            res = self.get_res_from_expr(e, t_bounds = t_bounds)
+            ax.plot(tt,res, "-.", color ="C"+str(i), lw=0.7*line_width, label =e)
+        
         #ax.yaxis.set_label_coords(-0.28,0.25)
         if len(products2)>0:
             if type(products2) is str:
@@ -1070,7 +1082,7 @@ class SimInterface(tk.Frame):
         self.initUI(sim)
     
     def initUI(self, sim):
-        
+        self.sim = sim
         self.master.title(sim.name)
         self.pack(fill=tk.BOTH, expand=True)
                 
@@ -1081,7 +1093,7 @@ class SimInterface(tk.Frame):
         
         f_settings = self._create_settings_f(self, sim)
         f_settings.pack(side=tk.TOP, fill=tk.X)
-        f_places = tk.Frame(self)
+        f_places = self._create_graph_selection(self, sim)
         f_places.pack(fill=tk.X, side=tk.LEFT)
         
         f_plot = tk.Frame(self)
@@ -1104,11 +1116,11 @@ class SimInterface(tk.Frame):
 #            if(e.char == "\n"): self.update(True)
 #        f_params.bind('<Return>', lambda e: key_pressed(e) ) 
         
-        self._show_sp = []
+        self._show_sp = [[],[]]
+        self._show_sp
         i = 0
-        p_labels = []
         self.par_entries = {}
-        self.pl_entries = {}
+       
         for k, v in sim.params.items():
 #            row = tk.Frame(f_params)
 #            row.pack(side=tk.TOP, fill=tk.X, padx = 1, pady=1)
@@ -1120,31 +1132,11 @@ class SimInterface(tk.Frame):
             entr.bind('<Return>', lambda e: self.update(True) ) 
             self.par_entries[k]= entr
             i +=1
-        self._spezies_checkb = {}
-        self._spezies_col_b = {}
-        i = 0
-        for k, v in sim.init_state.items():
-            c = sim._get_color(k)
-            checked = tk.IntVar()
-            check_box = tk.Checkbutton(f_places, text=k, variable = checked, #command = self.update)
-                                       command= lambda : self.update(False))
-#            check_box.select()
-            check_box.grid(row=i, column=0)
-            self._spezies_checkb[k] = checked
-            entr = tk.Entry(f_places, width=4)
-            entr.insert(0,v)
-            entr.grid(row=i, column=1)
-            self.pl_entries[k]= entr
-            b_col = tk.Button(f_places, height =1, width=1, bg = colors.to_hex(c),
-                              command = lambda key=k: self._new_color(key))
-            b_col.grid(row=i, column=3)
-            self._spezies_col_b[k] = b_col
             
-            i +=1
-        
+       
+            
         fig = plt.Figure(figsize=(5,5))
-        ax = fig.add_subplot(111)
-        self._ax = ax
+        self._fig = fig
         canvas = FigureCanvasTkAgg(fig, f_plot)
         canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
         self._canvas = canvas
@@ -1176,6 +1168,60 @@ class SimInterface(tk.Frame):
         e_raster.grid(row=1, column=1)
         self._setting_e["raster_count"] = e_raster
         return f_settings
+    
+    def _create_graph_selection(self, master, sim):
+        self._spezies_checkb = {}
+        self._spezies_checkb2 = {}
+        self._spezies_col_b = {}
+        self.pl_entries = {}
+        frame = tk.Frame(master)
+        for i, (k, v) in enumerate(sim.init_state.items()):
+            c = sim._get_color(k)
+            checked = tk.IntVar()
+            check_box = tk.Checkbutton(frame, text="", variable = checked, #command = self.update)
+                                       command= lambda : self.update(False))
+#            check_box.select()
+            check_box.grid(row=i, column=0)
+            self._spezies_checkb[k] = checked
+            checked = tk.IntVar()
+            check_box = tk.Checkbutton(frame, text="", variable = checked, #command = self.update)
+                                       command= lambda : self.update(False))
+#            check_box.select()
+            check_box.grid(row=i, column=1)
+            self._spezies_checkb2[k] = checked
+            label = tk.Label(frame, text=k)
+            label.grid(row=i, column =2)
+            entr = tk.Entry(frame, width=4)
+            entr.insert(0,v)
+            entr.grid(row=i, column=3)
+            self.pl_entries[k]= entr
+            b_col = tk.Button(frame, height =1, width=1, bg = colors.to_hex(c),
+                              command = lambda key=k: self._new_color(key))
+            b_col.grid(row=i, column=3)
+            self._spezies_col_b[k] = b_col
+            
+        #create transition(rate) selection
+        i+=1
+        self._transtion_checks = []
+        checked = tk.IntVar()
+        check_box = tk.Checkbutton(frame, text="", variable = checked, #command = self.update)
+                                   command= lambda : self.update(False))
+        check_box.grid(row=i, column=0)
+        self._transtion_checks.append(checked)
+        checked = tk.IntVar()
+        check_box = tk.Checkbutton(frame, text="", variable = checked, #command = self.update)
+                                   command= lambda : self.update(False))
+        check_box.grid(row=i, column=1)
+        self._transtion_checks.append(checked)
+        
+        transition_cb = ttk.Combobox(frame, values=list(sim._transitions))
+        transition_cb.current(1)
+        transition_cb.bind("<<ComboboxSelected>>", lambda: self.update(False))
+        transition_cb.grid(row=i, column=2)
+        self._tr_cb = transition_cb
+            
+        return frame
+            
     def _new_color(self, name):
         b_c = self._spezies_col_b[name]
         col_new = askcolor(b_c.cget("bg"))[1]
@@ -1185,10 +1231,11 @@ class SimInterface(tk.Frame):
         self.update(False)
     
     def _plot_sim(self):
-        ax = self._ax
-        ax.clear()
+        self._fig.clear()
+        ax = self._fig.add_subplot(111)
+#        ax.clear()
         print(self._show_sp)
-        self.sim.plot_course(ax = ax, products = self._show_sp)
+        self.sim.plot_course(ax = ax, products = self._show_sp[0], products2=self._show_sp[1])
         ax.legend([])
         ax.set_ylabel("#", rotation = 0)
         self._canvas.draw()
@@ -1210,9 +1257,22 @@ class SimInterface(tk.Frame):
     def fetch_places(self):
         sim = self.sim
         self._show_sp = []
+        show_sp = []
         for k, checked in self._spezies_checkb.items():
             if checked.get():
-                self._show_sp.append(k)
+                show_sp.append(k)
+                
+        show_sp2 = []
+        for k, checked in self._spezies_checkb2.items():
+            if checked.get():
+                show_sp2.append(k)
+                
+        self._show_sp=[show_sp, show_sp2]
+        
+        for i, tr_cb in enumerate(self._transtion_checks):
+            if(tr_cb.get()):
+                self._show_sp[i].append(sim._transitions[self._tr_cb.get()]["rate_ex"])
+        
         
     def fetch_pars(self):
         sim = self.sim
@@ -1791,11 +1851,11 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         #Splicing
         s.add_reaction("U1_1 * U2_1 * Intr1 * spl_rate",
                        {"Intr1":-1, "U1_1":-1, "U2_1":-1,
-                        "nascRNA_bc": "-u1_2_bs_pos - u1_1_bs_pos"},
+                        "nascRNA_bc": "-u2_1_bs_pos - u1_1_bs_pos"},
                        name="Intron 1 excision")
         s.add_reaction("U1_2 * U2_2 * Intr2 * spl_rate",
                        {"Intr2":-1, "U1_2":-1, "U2_2":-1,
-                        "nascRNA_bc": "-u2_2_bs_pos - u2_1_bs_pos"},
+                        "nascRNA_bc": "-u2_2_bs_pos - u1_2_bs_pos"},
                        name="Intron 2 excision")
         s.add_reaction("U1_1 * U2_2 * spl_rate",
                        {"Intr1":-1, "Intr2":-1, "Exon1":-1,
