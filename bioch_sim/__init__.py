@@ -396,7 +396,7 @@ class SimParam(object):
                 if(v != 0):
 #                    print(v)
 #                    v_to_chek.append(str(v) + " <= st[%d]" % (j+1))
-                    v_to_chek.append("_pre[%d,%d] " % (i,j) + " <= st[%d]" % (j+1))
+                    v_to_chek.append("_pre[%d,%d] " % (i,j) + " <= %s" % list(self.init_state)[j])
             
             if len(v_to_chek) > 0:
                 func = "(" + func + ") if (" + ") and (".join(v_to_chek) + ") else 0" + "\n"
@@ -796,7 +796,7 @@ class SimParam(object):
            return self.get_result("stoch_rastr")[:, self.get_res_index(name)]
        return self.get_result("ODE")[:, self.get_res_index(name)]
    
-    def get_res_from_expr(self, expr, t_bounds=(0,np.inf)):
+    def get_res_by_expr(self, expr, t_bounds=(0,np.inf)):
         args = ["_pre", "_post"]
         arg_vals = []
         indx = np.where((self.raster > t_bounds[0]) * (self.raster < t_bounds[1]))[0]
@@ -814,7 +814,25 @@ class SimParam(object):
         res = f(*arg_vals)
         
         return res
-        
+    
+    def get_res_by_expr_2(self, expr, t_bounds=(0,np.inf)):
+        _pre = self.update_pre()
+        st = self.results["stoch_rastr"]
+        pars = self._constants
+        _u_pre = self._update_pre
+        f_str = "def _f(_st, _pars, _u_pre_f, _pre):\n"
+        f_str += "\tt=_st[0]\n"
+        f_str += "\t_u_pre_f(_st, _pars, _pre)\n"
+        expr = self._sub_vars(expr, par_name="_pars", place_name="_st")
+        f_str += "\treturn " + expr + "\n"
+        f_str += "self._f_tmp = _f\n"
+        print("AAAAAAAAAAA\n",f_str)
+        exec(f_str,   )
+        _f = np.vectorize(self._f_tmp, otypes=[np.float], excluded=(1,2,3),
+                          signature="(n,1)->(n)")
+        res = _f(st,pars, _u_pre, _pre)
+        return res
+    
     def get_psi_cv(self, **kwargs):
         psi = self.compute_psi(**kwargs)[1]
         sd, mean = np.std(psi), np.mean(psi)
@@ -988,7 +1006,7 @@ class SimParam(object):
         
         #plot expressions
         for i, e in enumerate(exprs):
-            res = self.get_res_from_expr(e, t_bounds = t_bounds)
+            res = self.get_res_by_expr(e, t_bounds = t_bounds)
             ax.plot(tt,res, "-.", color ="C"+str(i), lw=0.7*line_width, label =e)
         
         #ax.yaxis.set_label_coords(-0.28,0.25)
@@ -1271,7 +1289,7 @@ class SimInterface(tk.Frame):
         
         for i, tr_cb in enumerate(self._transtion_checks):
             if(tr_cb.get()):
-                self._show_sp[i].append(sim._transitions[self._tr_cb.get()]["rate_ex"])
+                self._show_sp[i].append(sim._transitions[self._tr_cb.get()]["rate"])
         
         
     def fetch_pars(self):
