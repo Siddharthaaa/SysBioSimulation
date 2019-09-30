@@ -26,16 +26,19 @@ import glob
 
 
 v0 = 20
-spl_r = 0.031
+spl_r = 0.33
 
 s = bs.get_exmpl_sim()
 s = bs.get_exmpl_sim("CoTrSplicing")
+s.compile_system()
+
+
 #s.set_param("spl_rate",2)
-s.set_param("u1_1_br", 0.08)
-s.set_param("u1_2_br", 0.176)   
-s.set_param("u2_1_br", 0.024)
-s.set_param("u2_2_br", 0.155)
-s.set_param("spl_rate", 0.172)
+s.set_param("u1_1_br", 0.159)
+s.set_param("u1_2_br", 0.072)   
+s.set_param("u2_1_br", 0.023)
+s.set_param("u2_2_br", 0.86)
+s.set_param("spl_rate", 0.33)
 s.set_param("d1", 2.2e-4)
 s.set_param("d2", 2.2e-4)
 s.set_param("elong_v", v0)
@@ -83,7 +86,7 @@ def model(parameters):
         if np.isnan(psi):
             psi= 0
         psis.append(psi)
-        counts.append(np.mean(s.get_res_from_expr("Incl+Skip")[-3000:]))
+        counts.append(np.mean(s.get_res_by_expr("Incl+Skip")[-3000:]))
 #        ret_t.append(np.mean(s.get_res_from_expr("ret + ret_i1 + ret_i2")[-3000:]))
     return {"PSI": np.array(psis),
             "counts": np.array(counts)}
@@ -110,11 +113,11 @@ class y_Distance(pa.Distance):
 # Their mean differs.
 
 
-limits = dict(u1_1_br = (0.001, 0.2),
-              u1_2_br=(0.01, 0.3),
-              u2_1_br=(0.001, 0.15),
-              u2_2_br = (0.01, 1),
-              spl_r=(0.1, 0.4)) 
+limits = dict(u1_1_br = (0.001, 0.4),
+              u1_2_br=(0.01, 0.15),
+              u2_1_br=(0.001, 0.05),
+              u2_2_br = (0.7, 2),
+              spl_r=(0.2, 0.8)) 
 
 parameter_priors = pa.Distribution(**{key: pa.RV("beta", 2, 2, a, b - a)
                                     for key, (a,b) in limits.items()})
