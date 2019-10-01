@@ -371,6 +371,7 @@ class SimParam(object):
             update_st_func += "\n".join(["\t" + subs + " += " + update for subs, update in zip(subs_to_update, updates)])
             update_st_func += "\n\treturn None \nself._fire_transition.append(update_st)\n"
             self._fire_transition_str.append(update_st_func)
+            #TODO str contains BUG potential
             exec(update_st_func)
         func_update_pre += "\treturn None \nself._update_pre = update_pre"
         func_update_post += "\treturn None \nself._update_post = update_post"
@@ -404,7 +405,7 @@ class SimParam(object):
 #            self._rate_funcs_extended.append(func)
             tr["rate_ex"] = func
             func_str += "\t_r_s[%d] = " %i + func  + "\n"
-        
+        print(func_str)
         func_str = self._sub_vars(func_str, par_name = "pars", place_name="st", dynamic=dynamic)
         func_str += "\treturn _r_s \n"
         func_str += "self._rates_function=_r_f_ \n"
@@ -1006,8 +1007,9 @@ class SimParam(object):
                 
         self.results["stoch_rastr"] = res_tmp
     
-    def plot_par_var_1d(self, par = "s1", vals = [1,2,3,4,5],ax = None, func=None, **func_pars):
+    def plot_par_var_1d(self, par = "s1", vals = [1,2,3,4,5], func=None, **func_pars):
         res = []
+        ax = None
         for v in vals:
             self.set_param(par, v)
             self.simulate()
@@ -1914,9 +1916,10 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         s.add_reaction("spl_rate*U12p * U22p*ret_i2/((ret+ret_i2)**2)",
                        {"ret_i2": -1, "Incl": 1, "U12p":-1, "U22p":-1}, "PostTr. ret_i2 -> Incl")
         
-        s.add_reaction("spl_rate * U11p*ret/(ret+ret_i1) * U22p*ret/(ret+ret_i2))",
+        s.add_reaction("spl_rate * U11p*ret/(ret+ret_i1) * U22p/(ret+ret_i2)",
                        {"ret": -1, "Skip": 1, "U11p":-1, "U22p":-1,
-                        "U21p":"-round(ret/U21p)", "U12p":"-round(ret/U12p)"},
+                        "U21p":"-round(U21p/(ret+ret_i1) if U21p > 0 else 0)",
+                        "U12p":"-round(U12p/(ret+ret_i2) if U12p > 0 else 0)"},
                        "PostTr. ret -> Skip")
 #        s.add_reaction("((u1_1_br+u2_2_br)/2  + 1/(spl_rate)) * ret", {"ret": -1, "Skip": 1}, "PostTr. ret -> Skip")
 #        s.add_reaction("((u1_1_br+u2_1_br)/2  + 1/(spl_rate)) * ret", {"ret": -1, "ret_i2": 1}, "PostTr. ret -> ret_i2")
@@ -1927,10 +1930,10 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         s.add_reaction("d1 * Incl", {"Incl": -1}, "Incl degr.")
         s.add_reaction("d2 * Skip", {"Skip": -1}, "Skip degr.")
 #        s.add_reaction("s3 * mRNA", {"mRNA": -1, "ret": 1})
-        s.add_reaction("d3 * ret", {"ret": -1}, "ret degr.")
-        s.add_reaction("d3 * ret_i1", {"ret_i1": -1}, "ret_i1 degr.")
-        s.add_reaction("d3 * ret_i2", {"ret_i2": -1}, "ret_i2 degr")
-        
+#        s.add_reaction("d3 * ret", {"ret": -1}, "ret degr.")
+#        s.add_reaction("d3 * ret_i1", {"ret_i1": -1}, "ret_i1 degr.")
+#        s.add_reaction("d3 * ret_i2", {"ret_i2": -1}, "ret_i2 degr")
+#        
         
     elif(name == "CoTrSplicing_2"):
         s = get_exmpl_sim("CoTrSplicing")

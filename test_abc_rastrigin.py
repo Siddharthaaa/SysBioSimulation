@@ -19,7 +19,7 @@ import numpy as np
 import os
 import tempfile
 import scipy.stats as st
-import pyabc as pa
+import pyabc
 
 
 # Define a gaussian model
@@ -68,7 +68,9 @@ parameter_priors = [
 # We plug all the ABC options together
 abc = pyabc.ABCSMC(
     models, parameter_priors,
-    pyabc.PercentileDistance(measures_to_use=["y"]))
+    pyabc.PercentileDistance(measures_to_use=["y"]),
+    population_size=100,
+    sampler=pyabc.sampler.MulticoreEvalParallelSampler(cores))
 
 # y_observed is the important piece here: our actual observation.
 y_observed = 0

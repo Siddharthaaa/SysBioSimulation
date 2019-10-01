@@ -25,6 +25,9 @@ import bioch_sim as bs
 import glob
 
 
+cores = 3
+populations = 8
+
 v0 = 20
 spl_r = 0.33
 
@@ -34,15 +37,15 @@ s.compile_system()
 
 
 #s.set_param("spl_rate",2)
-s.set_param("u1_1_br", 0.159)
-s.set_param("u1_2_br", 0.072)   
-s.set_param("u2_1_br", 0.023)
-s.set_param("u2_2_br", 0.86)
-s.set_param("spl_rate", 0.33)
+s.set_param("u1_1_br", 0.25)
+s.set_param("u1_2_br", 0.016)   
+s.set_param("u2_1_br", 0.0183)
+s.set_param("u2_2_br", 1.25)
+s.set_param("spl_rate", 0.55)
 s.set_param("d1", 2.2e-4)
 s.set_param("d2", 2.2e-4)
 s.set_param("elong_v", v0)
-#
+s.plot_par_var_1d("elong_v", np.linspace(10,100,51), s.get_psi_mean, ignore_fraction=0.5)
 #s.simulate()
 #s.plot_course(products=["Incl", "Skip"], products2=["ret", "ret_i1"], t_bounds=(100, 1234))
 
@@ -126,8 +129,9 @@ parameter_priors = pa.Distribution(**{key: pa.RV("beta", 2, 2, a, b - a)
 abc = pa.ABCSMC(
     models, parameter_priors,
     y_Distance(),
-    population_size=100,
-    sampler=pa.sampler.MulticoreEvalParallelSampler(10))
+    population_size=100
+#    ,    sampler=pa.sampler.MulticoreEvalParallelSampler(cores)
+    )
 abc.max_number_particles_for_distance_update = 100
 
 # y_observed is the important piece here: our actual observation.
@@ -144,7 +148,7 @@ abc_id = abc.new(db_path, y_observed)
 
 print("ABC-SMC run ID:", abc_id)
 
-h = abc.run(minimum_epsilon=0.01, max_nr_populations=15)
+h = abc.run(minimum_epsilon=0.01, max_nr_populations=populations)
 model_probabilities = h.get_model_probabilities()
 pa.visualization.plot_model_probabilities(h)
 
