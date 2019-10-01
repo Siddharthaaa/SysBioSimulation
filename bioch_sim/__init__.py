@@ -317,7 +317,15 @@ class SimParam(object):
                 **kwargs)
         return pn
     
-    def compile_system(self, dynamic = True):
+    def compile_system(self, dynamic = True, add_ns={}):
+        add_ns = add_ns.copy()
+        #convert function to jitted funcitons
+        for k, v in add_ns.items():
+            if(type(v) is types.FunctionType):
+                add_ns[k] = nb.njit(v)
+        globs = globals()
+        globs.update(add_ns)
+                
         self._constants = np.array(list(self.params.values()))
         #create reaction matrix
         n = len(self._reactions)
@@ -411,8 +419,12 @@ class SimParam(object):
         func_str += "self._rates_function=_r_f_ \n"
 #        print(func_str)
 #        print(self.param_str())
+#        locs = locals()
+#        locs.update(add_ns)
+#        print(locs)
+#        exec(func_str, globals(),locs)
         exec(func_str)
-        self._update_st_funcs =[]
+#        self._update_st_funcs =[]
         self._is_compiled = True
         self._dynamic_compile = dynamic
         self._curr_pre = self.update_pre()
@@ -455,27 +467,22 @@ class SimParam(object):
         self._update_post(st, pars, post)
         return post
     
-    def simulate(self, ODE = False, ret_raw=False, max_steps = 1e9):
+    def simulate(self, ODE = False, ret_raw=False, max_steps = 1e9, verbose = True):
         if not self._is_compiled:
             self.compile_system(dynamic=True)
         cpu_time = time.time()
         self._state = list(self.init_state.values())
         self._state.insert(0,0)
         self._state = np.array(self._state, dtype=np.float64)
-        print("simulate " + self.param_str())
+        if(verbose):
+            print("simulate " + self.param_str())
         results={}
         params = self.get_all_params()
         initial_state = params["init_state"]
         tt = params["raster"]
-#        print("raster:" ,len(tt))
-#        numba.types.functions.Dispatcher
-        
-#        fire_transitions = nb.typed.Dict()
-#        for i, f_trans in enumerate(self._fire_transition):
-#            fire_transitions[i]=f_trans
         pre = self.update_pre()
         post = self.update_post()
-        
+#        print("AAAA:\n", globals())
         sim_st = compute_stochastic_evolution(self._state,
                                               self._constants,
                                               nb.f4(self.runtime),
@@ -505,7 +512,8 @@ class SimParam(object):
         self.results=results
         self.results = results
         cpu_time = time.time() - cpu_time
-        print("runtime: ", cpu_time )
+        if verbose:
+            print("runtime: ", cpu_time )
         return results
     
     
@@ -1410,6 +1418,7 @@ def get_ODE_delta(x,t,sim):
 def compute_stochastic_evolution(state, constants, runtime, rate_func,
                                  pre_upd_f, post_upd_f , pre, post, time_steps, max_steps):
 #                                 , *transition_funcs):
+#    print("BBBB:\n", locals())
     STATE = np.zeros((len(time_steps), len(state)),dtype=np.float64)
 #    print(state.dtype)
 #    state= np.array(state, dtype = np.int64)
@@ -1795,7 +1804,7 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                 "u1_1_ur": 0.001, # unbinding rate of U1
                 "u2_1_ur": 0.001,
                 "u2_2_ur": 0.001,
-                "tr_term_rate": 100,
+#                "tr_term_rate": 100,
 #                "s1":s1, "s2":s2, "s3": 1e-4,
                 # http://book.bionumbers.org/how-fast-do-rnas-and-proteins-degrade/
                 "d1": 2e-4, "d2":2e-4, "d3":1e-3 # mRNA half life: 10-20 h -> lambda: math.log(2)/hl
@@ -1857,40 +1866,40 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         #Splicing
         s.add_reaction("U1_1 * U2_1 * Intr1 * spl_rate",
                        {"Intr1":-1, "U1_1":-1, "U2_1":-1,
-                        "nascRNA_bc": "-u2_1_bs_pos - u1_1_bs_pos"},
+                        "nascRNA_bc": "-(u2_1_bs_pos - u1_1_bs_pos)"},
                        name="Intron 1 excision")
         s.add_reaction("U1_2 * U2_2 * Intr2 * spl_rate",
                        {"Intr2":-1, "U1_2":-1, "U2_2":-1,
-                        "nascRNA_bc": "-u2_2_bs_pos - u1_2_bs_pos"},
+                        "nascRNA_bc": "-(u2_2_bs_pos - u1_2_bs_pos)"},
                        name="Intron 2 excision")
         s.add_reaction("U1_1 * U2_2 * spl_rate",
                        {"Intr1":-1, "Intr2":-1, "Exon1":-1,
-                        "nascRNA_bc": "-u2_2_bs_pos - u1_1_bs_pos",
+                        "nascRNA_bc": "-(u2_2_bs_pos - u1_1_bs_pos)",
                         "U1_1":-1, "U2_2":-1, "U1_2":"-U1_2", "U2_1":"-U2_1"},
                        name="Exon 1 excision (inclusion)")
         
         #Transcription termination
-        s.add_reaction("tr_term_rate",
+        s.add_reaction("elong_v",
                        {"Intr1":None, "Intr2":None, "Exon1":None,
                         "Skip":1, "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1},
                        name = "Termination: skipping")
-        s.add_reaction("tr_term_rate",
+        s.add_reaction("elong_v",
                        {"Intr1":None, "Intr2":None, "Exon1":-1, "Incl":1,
                         "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1},
                        name = "Termination: inclusion")
-        s.add_reaction("tr_term_rate",
+        s.add_reaction("elong_v",
                        {"Exon1":-1, "Intr1":-1, "Intr2":None, "ret_i1":1,
                         "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1,
                         "U1_1":"-U1_1", "U2_1": "-U2_1",
                         "U11p":"U1_1", "U21p":"U2_1"},
                        name = "Termination: ret i1")
-        s.add_reaction("tr_term_rate",
+        s.add_reaction("elong_v",
                        {"Exon1":-1, "Intr2":-1, "Intr1":None, "ret_i2":1,
                         "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1,
                         "U1_2":"-U1_2", "U2_2": "-U2_2",
                         "U12p":"U1_2", "U22p":"U2_2"},
                        name = "Termination: ret i2")
-        s.add_reaction("tr_term_rate",
+        s.add_reaction("elong_v",
                        {"Exon1":-1, "Intr1":-1, "Intr2":-1, "ret":1,
                         "Pol_pos": "-gene_len", "Pol_on":-1, "Pol_off":1,
                         "U1_1":"-U1_1", "U2_1": "-U2_1","U1_2":"-U1_2", "U2_2": "-U2_2",
@@ -1937,17 +1946,19 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         
     elif(name == "CoTrSplicing_2"):
         s = get_exmpl_sim("CoTrSplicing")
-        s.set_param("u2_pol_br", 1) # binding rate of U2 + Pol
+        s.set_param("u2_pol_br", 1) #binding rate of U2 + Pol
         s.set_param("u2_pol_ur", 0.01)
-        s.set_param("u2pol_br", 1) # binding rate of U2Pol + mRNA
+        s.set_param("u2pol_br", 1) #max binding rate of U2Pol + mRNA
         s.set_param("u2_pol_opt_d", 20) # optimal distance from Pol2
-        s.set_param("u2_pol_opt_d_r", 5)
-        s.add_reaction("Pol_on * u2_pol_br * (1 - U2_Pol)", {"U2_Pol":1}, "Pol + U2")
+        s.set_param("u2_pol_opt_d_r", 10)
+        s.add_reaction("Pol_on * u2_pol_br", {"U2_Pol":[1, None]}, "Pol + U2")
         s.add_reaction("U2_Pol * u2_pol_ur", {"U2_Pol":-1}, "Pol/U2 diss.")
-        s.add_reaction("(U2_Pol * Intr1 * u2pol_br * (1-1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_1_bs_pos))**2)) \
-                        if Pol_pos > u2_1_bs_pos and U2_1 < 1 else 0", {"U2_1":1, "U2_Pol":-1}, "U2onPol to nascRNA")
-        s.add_reaction("U2_Pol * Intr2 * u2pol_br * (1-1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_2_bs_pos))**2) \
-                        if Pol_pos > u2_2_bs_pos and U2_2 < 1 else 0", {"U2_2":1, "U2_Pol":-1}, "U2onPol to nascRNA")
+        s.add_reaction("(U2_Pol * Intr1 * u2pol_br * (1-1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_1_bs_pos+0.01))**4))",
+                        {"U2_1":[1,None], "U2_Pol":-1, "Pol_pos":["u2_1_bs_pos", "-u2_1_bs_pos"]},
+                        "U2onPol to U2_1")
+        s.add_reaction("U2_Pol * Intr2 * u2pol_br * (1-1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_2_bs_pos+0.01))**4) ",
+                        {"U2_2":[1,None], "U2_Pol":-1, "Pol_pos":["u2_2_bs_pos", "-u2_2_bs_pos"]},
+                        "U2onPol to U2_2")
         
 #        s.add_reaction()
         

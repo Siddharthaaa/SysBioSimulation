@@ -25,14 +25,14 @@ import bioch_sim as bs
 import glob
 
 
-cores = 3
-populations = 8
+cores = 10
+populations = 10
 
 v0 = 20
 spl_r = 0.33
 
 s = bs.get_exmpl_sim()
-s = bs.get_exmpl_sim("CoTrSplicing")
+s = bs.get_exmpl_sim("CoTrSplicing_2")
 s.compile_system()
 
 
@@ -45,7 +45,7 @@ s.set_param("spl_rate", 0.55)
 s.set_param("d1", 2.2e-4)
 s.set_param("d2", 2.2e-4)
 s.set_param("elong_v", v0)
-s.plot_par_var_1d("elong_v", np.linspace(10,100,51), s.get_psi_mean, ignore_fraction=0.5)
+#s.plot_par_var_1d("elong_v", np.linspace(10,100,51), s.get_psi_mean, ignore_fraction=0.5)
 #s.simulate()
 #s.plot_course(products=["Incl", "Skip"], products2=["ret", "ret_i1"], t_bounds=(100, 1234))
 
@@ -116,11 +116,11 @@ class y_Distance(pa.Distance):
 # Their mean differs.
 
 
-limits = dict(u1_1_br = (0.001, 0.4),
-              u1_2_br=(0.01, 0.15),
+limits = dict(u1_1_br = (0.1, 0.4),
+              u1_2_br=(0.001, 0.1),
               u2_1_br=(0.001, 0.05),
               u2_2_br = (0.7, 2),
-              spl_r=(0.2, 0.8)) 
+              spl_r=(0.2, 1.2)) 
 
 parameter_priors = pa.Distribution(**{key: pa.RV("beta", 2, 2, a, b - a)
                                     for key, (a,b) in limits.items()})
@@ -130,7 +130,7 @@ abc = pa.ABCSMC(
     models, parameter_priors,
     y_Distance(),
     population_size=100
-#    ,    sampler=pa.sampler.MulticoreEvalParallelSampler(cores)
+    ,    sampler=pa.sampler.MulticoreEvalParallelSampler(cores)
     )
 abc.max_number_particles_for_distance_update = 100
 
