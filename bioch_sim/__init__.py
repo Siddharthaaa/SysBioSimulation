@@ -1773,16 +1773,13 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         u1_2_bs_pos = 1700
         u2_2_bs_pos = 2800
         
-       
         v0 = 60
-        v1 = 0.2
-        v2 = 0.2
-        spl_r = 0.5
+        spl_r = 0.8
         
-        v1_1 = 0.1
-        v2_1 = 0.2
-        v1_2 = 0.2
-        v2_2 = 1
+        v1_1 = 0.234
+        v2_1 = 0.024
+        v1_2 = 0.012
+        v2_2 = 1.25
         s2 = 1/(3/(v1_1+v2_2)  + 1/(spl_r))
         s1 = 1/(3/(v1_1+v2_1)  + 3/(v1_2+v2_2) + 2/(spl_r))
         
@@ -1800,10 +1797,8 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                 "u2_1_br": v2_1,
                 "u1_2_br": v1_2,  # binding rate of U1
                 "u2_2_br": v2_2,
-                "u1_2_ur": 0.001,  # unbinding rate of U1 
-                "u1_1_ur": 0.001, # unbinding rate of U1
-                "u2_1_ur": 0.001,
-                "u2_2_ur": 0.001,
+                "u1ur": 0.001,  # unbinding rate of U1 
+                "u2ur": 0.001, # unbinding rate of U1
 #                "tr_term_rate": 100,
 #                "s1":s1, "s2":s2, "s3": 1e-4,
                 # http://book.bionumbers.org/how-fast-do-rnas-and-proteins-degrade/
@@ -1843,25 +1838,25 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                        {"U1_1":[1,None], "Intr1": [-1,1],
                         "Pol_pos":["-u1_1_bs_pos", "u1_1_bs_pos"]},
                        "U1_1 binding")
-        s.add_reaction("u1_1_ur * U1_1", {"U1_1":-1}, "U1_1 diss.")
+        s.add_reaction("u1ur * U1_1", {"U1_1":-1}, "U1_1 diss.")
         
         s.add_reaction("u1_2_br * Intr2",
                        {"U1_2":[1,None], "Intr2": [-1,1],
                         "Pol_pos":["-u1_2_bs_pos", "u1_2_bs_pos"]},
                         "U1_2 binding")
-        s.add_reaction("u1_2_ur * U1_2", {"U1_2":-1}, "U1_2 diss.")
+        s.add_reaction("u1ur * U1_2", {"U1_2":-1}, "U1_2 diss.")
         
         s.add_reaction("u2_1_br * Intr1",
                       {"U2_1":[1,None], "Intr1": [-1,1],
                         "Pol_pos":["-u2_1_bs_pos", "u2_1_bs_pos"]},
                        "U2_1 binding")
-        s.add_reaction("u2_1_ur * U2_1", {"U2_1":-1}, "U2_1 diss.")
+        s.add_reaction("u2ur * U2_1", {"U2_1":-1}, "U2_1 diss.")
         
         s.add_reaction("u2_2_br * Intr2",
                        {"U2_2":[1,None], "Intr2": [-1,1],
                         "Pol_pos":["-u2_2_bs_pos", "u2_2_bs_pos"]},
                         "U2_2 binding")
-        s.add_reaction("u2_2_ur * U2_2", {"U2_2":-1}, "U2_2 diss.")
+        s.add_reaction("u2ur * U2_2", {"U2_2":-1}, "U2_2 diss.")
         
         #Splicing
         s.add_reaction("U1_1 * U2_1 * Intr1 * spl_rate",
@@ -1908,13 +1903,13 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
          
         #Posttranscriptional reactions        
         s.add_reaction("(ret+ret_i1-U11p)*u1_1_br", {"U11p": 1}, "U11p binding")
-        s.add_reaction("U11p*u1_1_ur", {"U11p": -1}, "U11p unbinding")
+        s.add_reaction("U11p*u1ur", {"U11p": -1}, "U11p unbinding")
         s.add_reaction("(ret+ret_i1-U21p)*u2_1_br", {"U21p": 1}, "U21p binding")
-        s.add_reaction("U21p*u2_1_ur", {"U21p": -1}, "U21p unbinding")
+        s.add_reaction("U21p*u2ur", {"U21p": -1}, "U21p unbinding")
         s.add_reaction("(ret+ret_i2-U12p)*u1_2_br", {"U12p": 1}, "U12p binding")
-        s.add_reaction("U12p*u1_2_ur", {"U12p": -1}, "U12p unbinding")
+        s.add_reaction("U12p*u1ur", {"U12p": -1}, "U12p unbinding")
         s.add_reaction("(ret+ret_i2-U22p)*u2_2_br", {"U22p": 1}, "U22p binding")
-        s.add_reaction("U22p*u2_2_ur", {"U22p": -1}, "U22p unbinding")
+        s.add_reaction("U22p*u2ur", {"U22p": -1}, "U22p unbinding")
         
         s.add_reaction("spl_rate*U11p * U21p*ret/((ret+ret_i1)**2)",
                        {"ret": -1, "ret_i2": 1, "U11p":-1, "U21p":-1}, "PostTr. ret -> ret_i2")

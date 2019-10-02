@@ -117,7 +117,7 @@ class y_Distance(pa.Distance):
 
 
 limits = dict(u1_1_br = (0.1, 0.4),
-              u1_2_br=(0.001, 0.1),
+              u1_2_br=(0.001, 0.04),
               u2_1_br=(0.001, 0.05),
               u2_2_br = (0.7, 2),
               spl_r=(0.2, 1.2)) 

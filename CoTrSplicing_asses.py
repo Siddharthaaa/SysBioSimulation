@@ -18,16 +18,6 @@ import pandas as pd
 import support_th as sth
 import bioch_sim as bs
 import glob
-
-
-def get_total_IR(s):
-    r1 = s.get_res_col("ret")
-    r2 = s.get_res_col("ret_i1")
-    r3 = s.get_res_col("ret_i2")
-    
-    ir = r1 + r2 + r3
-    
-    return np.mean(ir[int(len(ir)/10):])
     
 s = bs.get_exmpl_sim("CoTrSplicing")
 s._clusters={}
@@ -49,7 +39,7 @@ for v2 in v2s:
     s.set_param("u1_2_br", v2)
     s.simulate()
     psis.append(s.get_psi_mean())
-    ret_total.append(get_total_IR(s))
+    ret_total.append(s.get_res_by_expr("ret + ret_i1 +ret_i2"))
 
 #s.plot_course(products=["ret_i2","ret_i1","ret"], res = ["stoch"])
 #s.plot_course(products=["Skip","Incl","ret"], res = ["stoch"])
@@ -75,20 +65,20 @@ ax.set_ylabel("IR total")
 s = bs.get_exmpl_sim("CoTrSplicing")
 s.compile_system()
 s.set_runtime(100000)
-s.plot_par_var_1d("elong_v", np.linspace(20,200,10),None, s.get_psi_mean)
+s.plot_par_var_1d("elong_v", np.linspace(20,200,10), s.get_psi_mean)
 
     
 s = bs.get_exmpl_sim("CoTrSplicing")
 s.set_runtime(80000)
-pars = {"elong_v": np.linspace(10,200,30), "u1_2_br": np.linspace(0.001,0.02, 20)}
+#pars = {"elong_v": np.linspace(10,200,30), "u1_2_br": np.linspace(0.001,0.02, 20)}
 res = s.plot_par_var_2d(pars, None, s.get_psi_mean, ignore_fraction=0.8)
 
 
 s = bs.get_exmpl_sim("CoTrSplicing")
 s.set_runtime(60000)
-s.set_param("elong_v", 50)
-psi_means =[]
+#s.set_param("elong_v", 50)
 
+psi_means =[]
 psis = []
 res = []
 ret = []
@@ -111,7 +101,7 @@ for v2  in v2s:
     incl.append(s.get_res_col("Incl"))
     skip.append(s.get_res_col("Skip"))
     
-    res.append(s.get_res_from_expr("ret + ret_i1 + ret_i2"))
+    res.append(s.get_res_by_expr("ret + ret_i1 + ret_i2"))
 
 res_means = [np.mean(r[-3000:]) for r in res]
 res_stds = [np.std(r[-3000:]) for r in res]
