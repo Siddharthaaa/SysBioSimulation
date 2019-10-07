@@ -296,12 +296,12 @@ class SimParam(object):
                     attr["arrowtail"] = "ediamond"
                     pass
         def draw_graph(g, attr):
-            print("AAAAAAAAA", g)
-            print(attr)
+#            print("AAAAAAAAA", g)
+#            print(attr)
             attr["rotate"] = 0
             attr["style"] = "dashed"
             attr["ratio"] = 2
-            attr["rankdir"] = "TB"
+            attr["rankdir"] = "LR"
 #            attr["bgcolor"] = "#ff0000"
             attr["label"] = "KOMM SCHON"
         if(rotation):

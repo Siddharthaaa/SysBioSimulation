@@ -655,7 +655,7 @@ def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000,
    
     s =bs.get_exmpl_sim("basic")
     s.simulate_ODE = False
-    s.set_raster_count(10001)
+    s.set_raster(10001)
     s.set_runtime(runtime)
     res = np.zeros(len(counts))
     
