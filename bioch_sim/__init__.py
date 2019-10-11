@@ -70,7 +70,7 @@ class empty(object):
     def __init__(self):
         pass
 
-class SimParam(object):
+class SimParam():
     def __init__(self, name, t=200, discr_points= 1001, params={}, init_state={}):
         self.name = str(name)
         self.runtime = t
@@ -87,6 +87,7 @@ class SimParam(object):
         self._dynamic_compile = False
         self._clusters ={}
         self._reset_results()
+        self._time_events = {}
     def set_param(self, name, value):
         self.params[name] = value
         self._is_compiled = self._dynamic_compile
@@ -134,6 +135,12 @@ class SimParam(object):
                 self.init_state[name] = 0
         self._is_compiled = False
 #    @nb.jit  # causes performance drops
+        
+    def add_timeEvent(self, t, s, name = None):
+        if (name is None):
+            name = "TimeEvent" + str(len(self._time_events) + 1)
+        self._time_events[t] = s
+        
     def get_rates(self, state=None):
         """ state must contain time as first element
         """
@@ -299,11 +306,12 @@ class SimParam(object):
 #            print("AAAAAAAAA", g)
 #            print(attr)
             attr["rotate"] = 0
-            attr["style"] = "dashed"
+            attr["style"] = "invis"
+#            attr["style"] = "dashed"
             attr["ratio"] = 2
             attr["rankdir"] = "LR"
 #            attr["bgcolor"] = "#ff0000"
-            attr["label"] = "KOMM SCHON"
+#            attr["label"] = "KOMM SCHON"
         if(rotation):
             pn.transpose()
         for e in engine:
@@ -391,6 +399,8 @@ class SimParam(object):
         exec(func_update_pre)
 #        self._reacts = self._post - self._pre
         
+        self._compile_timeEvents()
+        
         #create rates function
         self._r_s = np.zeros((len(self._rate_funcs),))
         func_str= "@nb.njit\n"
@@ -430,8 +440,24 @@ class SimParam(object):
         self._curr_pre = self.update_pre()
         self._curr_post = self.update_post()
         
-#        self._rates_function = types.MethodType( self._rates_function, self )
+#        self._rates_function = types.MethodType( self._rates_function, self 
         return func_str
+    
+    def _compile_timeEvents(self):
+        
+        events = self._time_events
+        s = "@nb.njit\n"
+        s += "def time_event(n, st, pars):\n"
+        
+        for i, t in enumerate(sorted(events)):
+            s += "\tif n == %d:\n" % i
+            s += "\t\t" + events[t] + "\n"
+        s += "self._time_events_f = time_event"
+        print(s)
+        s = self._sub_vars(s)
+        print(s)
+        exec(s)
+        
     
     def _sub_vars(self, s, par_name="pars", place_name = "st", dynamic = True):
         for i, name in enumerate(self.params.keys()):
@@ -483,14 +509,17 @@ class SimParam(object):
         pre = self.update_pre()
         post = self.update_post()
 #        print("AAAA:\n", globals())
+        self._constants = np.array(list(self.params.values()))
         sim_st = compute_stochastic_evolution(self._state,
                                               self._constants,
                                               nb.f4(self.runtime),
+                                              np.array(tt, np.float32),
                                               self._rates_function,
                                               self._update_pre,
                                               self._update_post,
                                               pre, post,
-                                              np.array(tt, np.float32),
+                                              self._time_events_f,
+                                              np.array(sorted(self._time_events), np.float32),
                                               nb.int64(max_steps))
         
         if ret_raw:
@@ -1034,15 +1063,25 @@ class SimParam(object):
     def plot_par_var_2d(self, pars = {"s1":[1,2,3], "s2": [1,2,4]},ax = None, func=None, **func_pars):
         
         names = list(pars.keys())
+        params = list(pars.values())
+        print(params)
+        
+        if(type(names[0]) is str):
+            names[0] = [names[0]]
+        if(type(names[1]) is str):
+            names[1] = [names[1]]
         
         res = []
         sim_res =[]
-        for par1 in pars[names[0]]:
+        for par1 in params[0]:
             r = []
             sim_r = []
-            self.set_param(names[0], par1)
-            for par2 in pars[names[1]]:
-                self.set_param(names[1], par2)
+            for n in names[0]:    
+                self.set_param(n, par1)
+            for par2 in params[1]:
+                
+                for n in names[1]:    
+                    self.set_param(n, par2)
                 self.simulate()
                 sim_r.append(self.results["stoch_rastr"])
                 r.append(func(**func_pars))
@@ -1052,9 +1091,9 @@ class SimParam(object):
         if ax is None:
             fig, ax = plt.subplots()
         
-        heatmap(np.array(res), pars[names[0]], pars[names[1]], ax, cbarlabel= func.__func__.__name__ +   str(func_pars) )
-        ax.set_xlabel(names[1])
-        ax.set_ylabel(names[0])
+        heatmap(np.array(res), params[0], params[1], ax, cbarlabel= func.__func__.__name__ +   str(func_pars) )
+        ax.set_xlabel(", ".join(names[1]))
+        ax.set_ylabel(", ".join(names[0]))
         
         results = empty()
         results.ax = ax
@@ -1415,8 +1454,8 @@ def get_ODE_delta(x,t,sim):
     return dx
   
 @nb.njit#(nb.f8(nb.f8[:,:], nb.f8[:], nb.f4, nb.f8[:](nb.f8[:],), nb.i4))
-def compute_stochastic_evolution(state, constants, runtime, rate_func,
-                                 pre_upd_f, post_upd_f , pre, post, time_steps, max_steps):
+def compute_stochastic_evolution(state, constants, runtime, time_steps, rate_func,
+                                 pre_upd_f, post_upd_f , pre, post, t_events_f, t_events, max_steps):
 #                                 , *transition_funcs):
 #    print("BBBB:\n", locals())
     STATE = np.zeros((len(time_steps), len(state)),dtype=np.float64)
@@ -1426,6 +1465,12 @@ def compute_stochastic_evolution(state, constants, runtime, rate_func,
     tf = runtime
     tt = 0
     steps = nb.int64(0)
+    
+    event_n = 0
+    if(len(t_events>0)):
+        t_event = t_events[0]
+    else:
+        t_event = np.inf
     
     i = steps+1
     length = len(time_steps)
@@ -1455,6 +1500,25 @@ def compute_stochastic_evolution(state, constants, runtime, rate_func,
             tt = time_steps[-1]
         else:
             tt = tt - np.log(1. - r1)/a_0
+            
+        if(tt >=t_event):
+            print("Event: ")
+            print(event_n)
+            print(t_event)
+            tt = t_event
+            while(tt > time_steps[i] and i < length):
+                STATE[i,:] = state
+                STATE[i,0] = time_steps[i]
+                i+=1
+            t_events_f(event_n, state, constants)
+            event_n +=1
+            if(event_n  >= len(t_events)):
+                t_event =np.inf
+            else:
+                t_event = t_events[event_n]
+            state[0] = tt
+            continue
+        
         state[0] = tt
         while(tt >= time_steps[i] and i < length):
             STATE[i,:] = state
@@ -1757,6 +1821,10 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         s.add_reaction("d2*Skip", {"Skip":-1}, "Skip degr."  )
         s.add_reaction("s3*pre_RNA", {"pre_RNA":-1, "ret":1}, "Retention" )
         s.add_reaction("d3*ret",  {"ret": -1}, "Ret. degr." )
+        
+        s.set_cluster("Pr_on", (1,))
+        s.set_cluster("Pr_off", (1,))
+        
     elif(name == "LotkaVolterra"):
         s = SimParam("Lotka Volterra", 50, 301,
                       {"k1":1, "k2":0.007, "k3":0.6 },

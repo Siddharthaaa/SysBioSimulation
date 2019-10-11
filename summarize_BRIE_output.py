@@ -24,6 +24,7 @@ import matplotlib.cm as cm
 from sklearn.decomposition import PCA
 
 from support_th import *
+import support_th as sth
 
 BRIE_dir = os.path.join("/home","timur","ext","working_dir","PRJEB15062", "BRIE_output")
 #BRIE_dir = os.path.join("E:\\Eigen Dateien\\Arbeit_IMB\\SysBioSimulation\\dates\\BRIE_output", "BRIE_output")
@@ -56,7 +57,7 @@ def _main():
     summary_df.set_index(cell_df["gene_id"].values, inplace=True)
 #    df = perform_QC(summary_df, min_counts = 2e5, min_se = 3000, max_share=0.9,
 #                    top_se_count=100, min_reads=5, min_cells=15)
-    df_f_s = perform_QC(summary_df, min_counts = 2e5, min_se = 2000, max_share=0.8,
+    df_f_s = sth.perform_QC(summary_df, min_counts = 2e5, min_se = 2000, max_share=0.8,
                     top_se_count=100, min_reads=5, min_cells=40)
     
 #    general_analysis(df, th_suppoints = 20)

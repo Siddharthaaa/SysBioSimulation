@@ -686,7 +686,7 @@ def tmp_simulate_std_gillespie(counts, psi_means, runtime=1000,
         s.simulate()
         (indx, psis) = s.compute_psi(ignore_extremes=False, recognize_threshold=1,
                                     exact_sum= c if exact_counts else None,
-                                    sim_rnaseq=sim_rnaseq, ignore_fraction=0.7)
+                                    sim_rnaseq=sim_rnaseq, ignore_fraction=0.5)
         if var_stab:
             psis = np.arcsin(np.sqrt(psis))
         res[i] = np.nanstd(psis, ddof=1)

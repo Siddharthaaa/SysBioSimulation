@@ -12,6 +12,7 @@ Combined single-cell profiling of expression and DNA methylation reveals splicin
 
 from bioch_sim import *
 from aux_th import *
+import support_th as sth
 import pandas as pd
 import numpy as np
 import operator
@@ -19,13 +20,13 @@ import types
 import re
 
 import pyabc
-from gtfparse import read_gtf
+#from gtfparse import read_gtf
 
-s_file = "data\\01_2_psi.xlsx"
-tpm_file = "data\\01_tpm_gene.csv"
-counts_file = "data\\01_counts_gene.csv"
+s_file = "data/01_2_psi.xlsx"
+tpm_file = "data/01_tpm_gene.csv"
+counts_file = "data/01_counts_gene.csv"
 gtf_file = "C:\\Users\\timuhorn\\Desktop\\Materials\\DBs\\gencode.v19.annotation.gtf_withproteinids"
-map_file = "data\\01_exon_to_gene.map"
+map_file = "data/01_exon_to_gene.map"
 
 #annot = read_gtf(gtf_file)
 
@@ -120,9 +121,29 @@ for df, name  in zip(dfs, phenotypes):
                 res_df.at[exon_name, "counts"] = None
                 tmp_count+=1
     res_dfs.append(res_df)
-
+df_original = res_dfs[0]
 tmp = general_analysis(res_dfs[0])
 tmp, i_p, df_corr = show_splicing_data(res_dfs[0], best_n = None, min_psi_th=0.20)
+
+def convert_df(df, counts_df):
+    cell_names = list(df)[1:]
+    mux = pd.MultiIndex.from_product([cell_names, ["counts", "FPKM",  "PSI"]], names = ["cell_ID", "value"])
+    summary_df = pd.DataFrame(columns=mux)
+    
+    indx = []
+    for i, ind in enumerate(counts_df.index):
+        if str(ind) in df1["Exon_ID/Cell_ID"].values:
+            indx.append(i)
+    
+    indx = np.array(indx)
+    for c_name in cell_names:
+        summary_df[(c_name, "counts")] = counts_df[c_name].values
+        summary_df[(c_name, "FPKM")] = counts_df[c_name].values
+        print(len(summary_df))
+        print(len(df))
+        summary_df[(c_name, "PSI")] = df[c_name].values
+    res_df = sth.extend_data(summary_df)
+    return res_df
 
 #fig, ax = plt.subplots(4, len(dfs))
 #i = 0

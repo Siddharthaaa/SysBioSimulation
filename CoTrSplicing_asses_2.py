@@ -24,10 +24,11 @@ import glob
 last_n = 5000
 
 s = bs.get_exmpl_sim("CoTrSplicing")
-s.set_runtime(8e4)
-s.set_param("d1",0.001)
-s.set_param("d2",0.001)
-
+s.set_runtime(2e5)
+s.set_param("d1",0.0003)
+s.set_param("d2",0.0003)
+s.set_param("u2ur", 0.02)
+s.set_param("u1ur", 0.02)
 
 psi_means =[]
 psis = []
@@ -37,7 +38,7 @@ reti1 = []
 reti2 = []
 incl =[]
 skip = []
-v2s = np.logspace(-3, 0, 401)
+v2s = np.logspace(-3, 0, 201)
 v0s = np.linspace(10,200,201)
 #for v2  in v2s:
 #    s.set_param("u1_2_br", v2)
@@ -110,8 +111,8 @@ ax.plot([0,std_max], [0, std_max], c = "red")
 
 ax = fig.add_subplot(1,3,3)
 ax.set_title("counts dependency")
-ax.set_xlabel("conts")
+ax.set_xlabel("counts")
 ax.set_ylabel("$\Delta STD(PSI)$")
 ax.scatter(counts, np.subtract(psi_stds,psi_std_basic_model))
 
-fig.set_title("Variation of v2")
+fig.suptitle("Variation of v0")
