@@ -140,7 +140,8 @@ class SimParam():
         if (name is None):
             name = "TimeEvent" + str(len(self._time_events) + 1)
         self._time_events[t] = s
-        
+    def delete_timeEvents(self):
+        self._time_events = {}
     def get_rates(self, state=None):
         """ state must contain time as first element
         """
@@ -452,6 +453,7 @@ class SimParam():
         for i, t in enumerate(sorted(events)):
             s += "\tif n == %d:\n" % i
             s += "\t\t" + events[t] + "\n"
+        s += "\treturn None\n"
         s += "self._time_events_f = time_event"
         print(s)
         s = self._sub_vars(s)
