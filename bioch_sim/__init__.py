@@ -635,6 +635,13 @@ class SimParam():
         self.cuda_last_params = all_params
         d_all_params = cuda.to_device(all_params)
 #        print(all_params)
+        
+        pre = self.update_pre()
+        post = self.update_post()
+        pre_buff = np.tile(pre, (dim[0],dim[1],1,1))
+        post_buff = np.tile(post, (dim[0],dim[1],1,1))
+        d_pre_buff = cuda.to_device(pre_buff)
+        d_post_buff = cuda.to_device(post_buff)
         raster = np.array(self.raster, np.float32)
 #        rng_states = create_xoroshiro128p_states(blocks * threads_per_block * 2, seed=1)
         rng_states = create_xoroshiro128p_states(2048, seed=1)
@@ -648,8 +655,25 @@ class SimParam():
 #        if not hasattr(self, "compute_stochastic_evolution_cuda"):
             gpu_rates_func = cuda.jit(device=True)(self._rates_function)
             self._gpu_rates_f = gpu_rates_func
+            
+            gpu_update_pre = cuda.jit(device=True)(self._update_pre)
+            gpu_update_post = cuda.jit(device=True)(self._update_post)
+            
+            
+            compute_stochastic_evolution(self._state,
+                                              self._constants,
+                                              nb.f4(self.runtime),
+                                              np.array(tt, np.float32),
+                                              self._rates_function,
+                                              self._update_pre,
+                                              self._update_post,
+                                              pre, post,
+                                              self._time_events_f,
+                                              np.array(sorted(self._time_events), np.float32),
+                                              nb.int64(max_steps))
+            
             @cuda.jit
-            def compute_stochastic_evolution_cuda(STATES, reacs, rates_b, constants_all,
+            def compute_stochastic_evolution_cuda(STATES, reacs, rates_b, constants_all, pre_all, post_all,
                                                   time_steps, max_steps, rng_st, progr_i, log):
 
                 th_nr = cuda.grid(2)
@@ -659,6 +683,8 @@ class SimParam():
                 
                 STATES = STATES[x,y]
                 constants_all = constants_all[x,y]
+                pre_all = pre_all[x,y]
+                post_all = post_all[x,y]
                 rates_b = rates_b[x,y]
                
                 steps = nb.int32(0)
@@ -673,7 +699,15 @@ class SimParam():
 
                     r1 = xoroshiro128p_uniform_float32(rng_st, thid*2)
                     r2 = xoroshiro128p_uniform_float32(rng_st, thid*2+1)
-                    gpu_rates_func(STATES[t_ind], constants_all, rates_b)
+                    
+#                    pre_upd_f(state, constants, pre)
+#                    post_upd_f(state, constants, post)
+#                    a_s = rate_func(state, constants, rates_array, pre)
+                    
+                    gpu_update_pre(STATES[t_ind], constants_all, pre_all)
+                    gpu_update_post(STATES[t_ind], constants_all, post_all)
+                    
+                    gpu_rates_func(STATES[t_ind], constants_all, rates_b, pre_all)
                     a_0 =0
                     for i in range(len(rates_b)):
                         a_0 += rates_b[i]
@@ -704,8 +738,8 @@ class SimParam():
                             break
                         
                     # update the systems state
-                    for j, r in enumerate(reacs[ind]):
-                        STATES[t_ind][j+1] += r
+                    for j, (pr,po) in enumerate(zip(pre_all[ind], post_all[ind])):
+                        STATES[t_ind][j+1] += po-pr
                     steps+=1
                     progr_i[x,y] = t_ind
             self.compute_stochastic_evolution_cuda = compute_stochastic_evolution_cuda
@@ -719,7 +753,9 @@ class SimParam():
 #            d_progr_indx = cuda.to_device(progress_indx)
             self.compute_stochastic_evolution_cuda[blocks, dim](d_out,
                                              d_reactions, d_rates_buff,
-                                             d_all_params, raster, max_steps,
+                                             d_all_params,
+                                             d_pre_buff, d_post_buff,
+                                             raster, max_steps,
                                              rng_states, d_progr_indx, d_log_arr )
 
             i+=1
