@@ -32,6 +32,8 @@ import matplotlib.mlab as mlab
 from matplotlib import gridspec
 from scipy.optimize import fsolve
 from scipy.integrate import odeint
+#other ode solver. IMPORTANT
+#from scikits.odes import ode
 import pickle
 import re
 import numba as nb
@@ -70,6 +72,29 @@ class empty(object):
     def __init__(self):
         pass
 
+class TimeEvent(object):
+    
+    _count = 0    
+    def __init__(self, t, a, name = None):
+        if (name is None):
+            name = "TimeEvent" + str(TimeEvent._count + 1)
+            TimeEvent._count+=1
+        self.name = name
+        self.t = t
+        self.action = a
+    def __lt__(self, te):
+        return self.t < te.t
+    def __le__(self, te):
+        return self.t <= te.t
+    def __gt__(self, te):
+        return self.t > te.t
+    def __ge__(self, te):
+        return self.t >= te.t
+    def __str__(self):
+        return self.name + ":" + " at " + str(self.t) + "\nAction: " + self.action 
+    def __repr__(self):
+        return  self.__str__()
+
 class SimParam():
     def __init__(self, name, t=200, discr_points= 1001, params={}, init_state={}):
         self.name = str(name)
@@ -87,7 +112,7 @@ class SimParam():
         self._dynamic_compile = False
         self._clusters ={}
         self._reset_results()
-        self._time_events = {}
+        self._time_events = []
     def set_param(self, name, value):
         self.params[name] = value
         self._is_compiled = self._dynamic_compile
@@ -136,12 +161,11 @@ class SimParam():
         self._is_compiled = False
 #    @nb.jit  # causes performance drops
         
-    def add_timeEvent(self, t, s, name = None):
-        if (name is None):
-            name = "TimeEvent" + str(len(self._time_events) + 1)
-        self._time_events[t] = s
+    def add_timeEvent(self, te):
+        self._time_events.append(te)
+        self._time_events = sorted(self._time_events)
     def delete_timeEvents(self):
-        self._time_events = {}
+        self._time_events = []
     def get_rates(self, state=None):
         """ state must contain time as first element
         """
@@ -446,13 +470,13 @@ class SimParam():
     
     def _compile_timeEvents(self):
         
-        events = self._time_events
+        events = sorted(self._time_events)
         s = "@nb.njit\n"
         s += "def time_event(n, st, pars):\n"
         
-        for i, t in enumerate(sorted(events)):
+        for i, te in enumerate(sorted(events)):
             s += "\tif n == %d:\n" % i
-            s += "\t\t" + events[t] + "\n"
+            s += "\t\t" + te.action + "\n"
         s += "\treturn None\n"
         s += "self._time_events_f = time_event"
         print(s)
@@ -495,58 +519,140 @@ class SimParam():
         self._update_post(st, pars, post)
         return post
     
-    def simulate(self, ODE = False, ret_raw=False, max_steps = 1e9, verbose = True):
+    def simulate(self, tr_count=1, ODE = False, ret_raw=False, max_steps = 1e9, verbose = True):
         if not self._is_compiled:
             self.compile_system(dynamic=True)
         cpu_time = time.time()
         self._state = list(self.init_state.values())
-        self._state.insert(0,0)
+        self._state.insert(0,0.)
         self._state = np.array(self._state, dtype=np.float64)
-        if(verbose):
+        if(verbose and False):
             print("simulate " + self.param_str())
         results={}
         params = self.get_all_params()
-        initial_state = params["init_state"]
-        tt = params["raster"]
+        tt = self.raster
         pre = self.update_pre()
         post = self.update_post()
 #        print("AAAA:\n", globals())
         self._constants = np.array(list(self.params.values()))
-        sim_st = compute_stochastic_evolution(self._state,
-                                              self._constants,
-                                              nb.f4(self.runtime),
-                                              np.array(tt, np.float32),
-                                              self._rates_function,
-                                              self._update_pre,
-                                              self._update_post,
-                                              pre, post,
-                                              self._time_events_f,
-                                              np.array(sorted(self._time_events), np.float32),
-                                              nb.int64(max_steps))
-        
-        if ret_raw:
-            results["stochastic"] = sim_st
+        state = np.copy(self._state)
+        dim = (len(tt),) + state.shape
+        _last_results = []
+        t_events = self._time_events.copy()
+        t_events.append(None)
+        t_low = 0.
+        for i in range(tr_count):
+            t = time.time()
+            STATES = np.zeros(dim)
+            steps = 0
+            for k, te in enumerate(t_events):
+                if te is None:
+                    t_high = tt[-1]
+                else:
+                    t_high = te.t
+                indx = np.where((tt>=t_low) * (tt <=t_high))[0]
+                if(len(indx)>0):
+                    il = indx[0]
+                    ih = indx[-1]+1
+                else:
+                    il = 0
+                    ih = il
+                steps += compute_stochastic_evolution(state,
+                                                      t_high,
+                                                      self._constants,
+                                                      STATES[il:ih],
+                                                      tt[il:ih],
+                                                      self._rates_function,
+                                                      self._update_pre,
+                                                      self._update_post,
+                                                      pre, post,
+                                                      nb.int64(max_steps))
+                if te is not None:
+                    state[0] = te.t
+#                    print(steps)
+#                    print("EVENT ",k)
+                    self._time_events_f(k, state, self._constants)
+                t_low = t_high
+            _last_results.append(STATES)
+            t = time.time() - t
+            if verbose:
+                print("Steps: ", steps)
+                print("runtime: ", t)
+        self._last_results = np.array(_last_results)
+#        if ret_raw:
+#            results["stochastic"] = sim_st
 #        sim_st_raster = rasterize(sim_st, tt)
-        results["stoch_rastr"] = sim_st
+        results["stoch_rastr"] = STATES
         
         #determinisitic simulation
-        
-        y_0 = initial_state
         if ODE or self.simulate_ODE:
-            #numba make odent slower
-#            sol_deterministic = odeint(get_ODE_delta,y_0,tt,
-#                                       args = (np.array(self.get_reacts().transpose(), dtype=np.float64)
-#                                       , self._rates_function))
-            sol_deterministic = odeint(get_ODE_delta,y_0,tt,args = (self,))
+            sol_deterministic = self._simulate_ODE()
             #add time column
+            print(sol_deterministic.shape)
             results["ODE"] = np.hstack((tt.reshape(len(tt),1),sol_deterministic))
-        self.results=results
         self.results = results
         cpu_time = time.time() - cpu_time
         if verbose:
-            print("runtime: ", cpu_time )
+            print("runtime: total", cpu_time )
         return results
     
+    def _simulate_ODE(self, start_t=0.):
+        t_events = self._time_events.copy()
+        t_events.append(None)
+        t_low = start_t
+        raster = self.raster
+        self._constants = np.array(list(self.params.values()))
+        results = []
+        y_0 = np.array(list(self.init_state.values()), dtype="float64")
+        t_high_old = np.inf
+        for k, te in enumerate(t_events):
+            if te is None:
+                t_high = raster[-1]
+            else:
+                t_high = te.t
+            indx = np.where((raster>=t_low) * (raster <=t_high))[0]
+            if(len(indx)>0):
+                il = indx[0]
+                ih = indx[-1]+1
+            else:
+                il = 0
+                ih = il
+            tt = raster[il:ih]
+            if t_low not in tt:    
+                tt = np.insert(tt, 0, t_low)
+            if t_high not in tt:
+                tt = np.append(tt, t_high)
+            print("Rasterlen: ", len(tt))
+            res = odeint(get_ODE_delta,y_0,tt,args = (self,))
+            print("Res Shape: ", res.shape)
+            y_0 = np.insert(res[-1], 0, t_high)
+            if te is not None:
+                self._time_events_f(k, y_0, self._constants)
+            y_0 = np.delete(y_0, 0)
+            if(t_high_old == t_low):
+                res = np.delete(res, 0,0)
+            t_high_old = t_high
+            if (len(res) > 0):
+#                print("Append.... ", res.shape)
+                results.append(res)
+            t_low = t_high
+        
+#        res = results[0]
+#        #clean similar connections
+#        for r in results[1:]:
+#            while(len(r) > 0 and (res[-1][0] == r[0][0])):
+#                r = np.delete(r,0,0)
+#                print("deleteing....")
+#            if len(r)>0:
+#                res = np.concatenate([res,r])
+        results = np.concatenate(list(results))
+        print("Before Reshape: ", results.shape)
+        #remove/flatten first dimension
+#        print(results)
+#        results = results.reshape(-1, res.shape[-1])
+        return results
+#            return np.hstack((tt.reshape(len(tt),1),results))
+            
     
     def simulate_cuda(self, params = {"s1": [1,2,3,4,5,6,7,8,9],
                                       "s2": [0.4,0.5,0.7,1,2,3]},
@@ -658,19 +764,6 @@ class SimParam():
             
             gpu_update_pre = cuda.jit(device=True)(self._update_pre)
             gpu_update_post = cuda.jit(device=True)(self._update_post)
-            
-            
-            compute_stochastic_evolution(self._state,
-                                              self._constants,
-                                              nb.f4(self.runtime),
-                                              np.array(tt, np.float32),
-                                              self._rates_function,
-                                              self._update_pre,
-                                              self._update_post,
-                                              pre, post,
-                                              self._time_events_f,
-                                              np.array(sorted(self._time_events), np.float32),
-                                              nb.int64(max_steps))
             
             @cuda.jit
             def compute_stochastic_evolution_cuda(STATES, reacs, rates_b, constants_all, pre_all, post_all,
@@ -838,7 +931,7 @@ class SimParam():
         
         if re.search("\\b_pre\[", expr) is not None:
             return self.get_res_by_expr_2(expr, t_bounds)
-        indx = np.where((self.raster > t_bounds[0]) * (self.raster < t_bounds[1]))[0]
+        indx = np.where((self.raster >= t_bounds[0]) * (self.raster <= t_bounds[1]))[0]
         _st = self.get_result("stoch_rastr")[indx]
         expr = self._sub_vars(expr, par_name="_pars", place_name="_st")
         expr = "lambda t, _st, _pars: " + expr
@@ -850,7 +943,7 @@ class SimParam():
     
     def get_res_by_expr_2(self, expr, t_bounds=(0,np.inf)):
         
-        indx = np.where((self.raster > t_bounds[0]) * (self.raster < t_bounds[1]))[0]
+        indx = np.where((self.raster >= t_bounds[0]) * (self.raster <= t_bounds[1]))[0]
         _pre = self.update_pre()
         st = self.results["stoch_rastr"]
         _pars = self._constants
@@ -1007,7 +1100,7 @@ class SimParam():
             
         if type(products) == str:
             products = [products]
-        indx = np.where((self.raster > t_bounds[0]) * (self.raster < t_bounds[1]))[0]
+        indx = np.where((self.raster >= t_bounds[0]) * (self.raster <= t_bounds[1]))[0]
         tt = self.raster[indx]
         #st_res =self.get_result("stochastic")
         stoch_res = self.get_result("stoch_rastr")
@@ -1061,6 +1154,25 @@ class SimParam():
             ax.set_xlabel("time",fontsize="large" )
             ax.set_title(self.name)
             ax.legend()
+        return ax
+    
+    def plot_series(self, ax=None, products=[], t_bounds=(0, np.inf), scale=1):
+        if ax == None:
+            fig, ax = plt.subplots(1, figsize=(10*scale,10*scale))
+        if type(products) == str:
+            products = [products]
+        if len(products) == 0:
+            products = list(self.init_state.keys()[0])
+            
+        indx = np.where((self.raster >= t_bounds[0]) * (self.raster <= t_bounds[1]))[0]
+        tt = self.raster[indx]
+        indices, colors = self._get_indices_and_colors(products)
+
+        for index, col, p in zip(indices, colors, products):
+            results = self._last_results[:,indx,index]
+            mean = np.mean(results, axis = 0)
+            ax.plot(tt, results.T, c=col, lw=0.2, alpha=0.5)
+            ax.plot(tt, mean, c = col, lw=3, label = p, alpha=1)
         return ax
     
     def plot_cuda(self, **kwargs):
@@ -1490,32 +1602,18 @@ def get_ODE_delta(x,t,sim):
 #    print(reacts, rates)
     dx = reacts.transpose().dot(rates)
     return dx
-  
+
 @nb.njit#(nb.f8(nb.f8[:,:], nb.f8[:], nb.f4, nb.f8[:](nb.f8[:],), nb.i4))
-def compute_stochastic_evolution(state, constants, runtime, time_steps, rate_func,
-                                 pre_upd_f, post_upd_f , pre, post, t_events_f, t_events, max_steps):
-#                                 , *transition_funcs):
-#    print("BBBB:\n", locals())
-    STATE = np.zeros((len(time_steps), len(state)),dtype=np.float64)
-#    print(state.dtype)
-#    state= np.array(state, dtype = np.int64)
-    STATE[0,:] = state
-    tf = runtime
-    tt = 0
+def compute_stochastic_evolution(state, t_max, constants, STATES, time_steps, rate_func,
+                                 pre_upd_f, post_upd_f , pre, post, max_steps):
+    tt = state[0]
     steps = nb.int64(0)
-    
-    event_n = 0
-    if(len(t_events>0)):
-        t_event = t_events[0]
-    else:
-        t_event = np.inf
-    
-    i = steps+1
+    i = 0
     length = len(time_steps)
     rates_array = np.zeros(len(pre))
     rr_count = int(1e5)
     j=0
-    while tt <= tf and steps < max_steps and i < length:
+    while steps < max_steps:
         if j % rr_count ==0:
             rr = np.random.uniform(0,1,size=2*rr_count)
             j=0
@@ -1538,46 +1636,26 @@ def compute_stochastic_evolution(state, constants, runtime, time_steps, rate_fun
             tt = time_steps[-1]
         else:
             tt = tt - np.log(1. - r1)/a_0
-            
-        if(tt >=t_event):
-            print("Event: ")
-            print(event_n)
-            print(t_event)
-            tt = t_event
-            while(tt > time_steps[i] and i < length):
-                STATE[i,:] = state
-                STATE[i,0] = time_steps[i]
-                i+=1
-            t_events_f(event_n, state, constants)
-            event_n +=1
-            if(event_n  >= len(t_events)):
-                t_event =np.inf
-            else:
-                t_event = t_events[event_n]
-            state[0] = tt
-            continue
         
         state[0] = tt
         while(tt >= time_steps[i] and i < length):
-            STATE[i,:] = state
-            STATE[i,0] = time_steps[i]
+            STATES[i,:] = state
+            STATES[i,0] = time_steps[i]
             i+=1
+        if(tt > t_max):
+            break
         # find the next reaction
         prop = r2 * a_0
         cum_a_s = np.cumsum(a_s)
-        #print(cum_a_s, prop)
         ind = np.where(prop <= cum_a_s)[0][0]
         # update the systems state
         state[1:] +=post[ind] - pre[ind]
 #        transition_funcs[ind](state, constants) # does not work :(
         
         steps+=1
-#        STATE[steps,:] = state
-        
-    
-#    return STATE[0:steps+1]
-    print("Steps needed: ", steps)
-    return STATE
+
+#    print("Steps needed: ", steps)
+    return steps
 # define parameters  
 
 def sigmoid(x, mu=0, y_bounds=(0,1), range_95=6):

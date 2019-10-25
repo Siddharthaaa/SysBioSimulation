@@ -12,6 +12,9 @@ import support_th as sth
 
 import numpy as np
 
+s = bs.get_exmpl_sim()
+s.simulate()
+
 s = bs.SimParam("2A + B <=> X", 1.5,10001,
                 dict(k1=0.01, k2=0.05),
                 dict(A=200, B = 450, X = 0))
