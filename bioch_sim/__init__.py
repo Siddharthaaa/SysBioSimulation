@@ -604,7 +604,7 @@ class SimParam():
         self._constants = np.array(list(self.params.values()))
         results = []
         y_0 = np.array(list(self.init_state.values()), dtype="float64")
-        t_high_old = np.inf
+        ih_old = -1
         for k, te in enumerate(t_events):
             if te is None:
                 t_high = raster[-1]
@@ -613,15 +613,13 @@ class SimParam():
             indx = np.where((raster>=t_low) * (raster <=t_high))[0]
             if(len(indx)>0):
                 il = indx[0]
-                ih = indx[-1]+1
+                ih = indx[-1]
             else:
                 il = 0
                 ih = il
-            tt = raster[il:ih]
-            if t_low not in tt:    
-                tt = np.insert(tt, 0, t_low)
-            if t_high not in tt:
-                tt = np.append(tt, t_high)
+            tt = raster[il:ih+1]
+            tt = np.insert(tt, 0, t_low)
+            tt = np.append(tt, t_high)
             print("Rasterlen: ", len(tt))
             res = odeint(get_ODE_delta,y_0,tt,args = (self,))
             print("Res Shape: ", res.shape)
@@ -629,9 +627,10 @@ class SimParam():
             if te is not None:
                 self._time_events_f(k, y_0, self._constants)
             y_0 = np.delete(y_0, 0)
-            if(t_high_old == t_low):
+            res = np.delete(res, [0,len(res)-1],0)
+            if(ih_old == il):
                 res = np.delete(res, 0,0)
-            t_high_old = t_high
+            ih_old = ih
             if (len(res) > 0):
 #                print("Append.... ", res.shape)
                 results.append(res)
