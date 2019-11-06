@@ -341,7 +341,7 @@ class SimParam():
             pn.transpose()
         for e in engine:
             f_name = re.sub("(\.\w+)$", "_"+ e + "\\1", filename)
-            pn.draw(f_name, engine = e, debug=True,
+            pn.draw(f_name, engine = e, debug=False,
                 place_attr=draw_place,
                 trans_attr=draw_transition ,
                 arc_attr = draw_arc,
@@ -535,16 +535,18 @@ class SimParam():
         post = self.update_post()
 #        print("AAAA:\n", globals())
         self._constants = np.array(list(self.params.values()))
-        state = np.copy(self._state)
-        dim = (len(tt),) + state.shape
+        dim = (len(tt),) + self._state.shape
         _last_results = []
         t_events = self._time_events.copy()
         t_events.append(None)
-        t_low = 0.
+        
         for i in range(tr_count):
             t = time.time()
+            self._constants = np.array(list(self.params.values()))
+            state = np.copy(self._state)
             STATES = np.zeros(dim)
             steps = 0
+            t_low = 0.
             for k, te in enumerate(t_events):
                 if te is None:
                     t_high = tt[-1]
@@ -1096,7 +1098,7 @@ class SimParam():
                     plot_psi=False, clear = False):
         if ax == None:
             fig, ax = plt.subplots(1, figsize=(10*scale,10*scale))
-            
+        ax2 = None
         if type(products) == str:
             products = [products]
         indx = np.where((self.raster >= t_bounds[0]) * (self.raster <= t_bounds[1]))[0]
@@ -1121,7 +1123,7 @@ class SimParam():
             index = self.get_res_index(name)
             color = self.colors[index-1]
             if "stoch" in res:
-                lines.append(ax.plot(stoch_res[indx,0],stoch_res[indx,index], label = name +"(stoch)",
+                lines.append(ax.plot(stoch_res[indx,0],stoch_res[indx,index], label = name,
                          color = color, lw = 0.5*line_width,drawstyle = 'steps')[0])
                 
             mean = np.mean(stoch_res[int(len(stoch_res)/3):,index])
@@ -1129,7 +1131,7 @@ class SimParam():
             if plot_mean:
                 ax.plot([tt[0],tt[-1]], [mean,mean], "--", color=color, lw=line_width)
             if "ODE" in res and ode_res is not None:
-                ax.plot(tt,ode_res[indx,index],"--", color = color, lw = 1.5*line_width, label = name + "(ODE)")
+                ax.plot(tt,ode_res[indx,index],"-", color = color, lw = 1.5*line_width, label = name + "(ODE)")
         
         #plot expressions
         for i, e in enumerate(exprs):
@@ -1140,8 +1142,9 @@ class SimParam():
         if len(products2)>0:
             if type(products2) is str:
                 products2 = [products2]
-            ax_2 = ax.twinx()
-            ax_2 = self.plot_course(ax = ax_2, products=products2, t_bounds = t_bounds, clear=True)
+            ax2 = ax.twinx()
+            self.plot_course(ax = ax2, res=res, products=products2, t_bounds = t_bounds, clear=True)
+#            ax_2.legend()
         if(plot_psi):
             ax_psi = ax.twinx()
             (indx, psis) = self.compute_psi()
@@ -1153,7 +1156,7 @@ class SimParam():
             ax.set_xlabel("time",fontsize="large" )
             ax.set_title(self.name)
             ax.legend()
-        return ax
+        return ax, ax2
     
     def plot_series(self, ax=None, products=[], t_bounds=(0, np.inf), scale=1):
         if ax == None:
@@ -1161,7 +1164,7 @@ class SimParam():
         if type(products) == str:
             products = [products]
         if len(products) == 0:
-            products = list(self.init_state.keys()[0])
+            products = list(self.init_state.keys())[0]
             
         indx = np.where((self.raster >= t_bounds[0]) * (self.raster <= t_bounds[1]))[0]
         tt = self.raster[indx]
