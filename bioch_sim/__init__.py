@@ -1194,7 +1194,7 @@ class SimParam():
         self.results["stoch_rastr"] = res_tmp
     
     def plot_par_var_1d(self, par = "s1", vals = [1,2,3,4,5], label = None,
-                        ax=None, func=None, **func_pars):
+                        ax=None, plot_args = dict(), func=None, **func_pars):
         res = []
         for v in vals:
             self.set_param(par, v)
@@ -1203,7 +1203,7 @@ class SimParam():
         if ax is None:
             fig, ax = plt.subplots()
         
-        ax.plot(vals, res, label = label)
+        ax.plot(vals, res, label = label, **plot_args)
         ax.set_ylabel(func.__func__.__name__ +   str(func_pars))
         ax.set_xlabel(par)
         
