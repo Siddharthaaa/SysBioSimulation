@@ -20,7 +20,7 @@ tau3 = tau1*692/212;
 
 
 s = bs.SimParam("CoTrSpl delayd pars",
-                10000, 10001, 
+                10, 10001, 
                 {"k1":0, "k2":0, "k3":0,"d":1, "ks":1e-1},
                 {"S000":10000, "S001":0, "S010":0, "S011":0, "S100":0,
                            "S101":0, "S110":0, "S111":0})
@@ -52,8 +52,8 @@ s.add_reaction("ks*S100", {"S100":-1, "FullIR":1})
 s.add_timeEvent(bs.TimeEvent(tau1, "k1=5e-2"))
 s.add_timeEvent(bs.TimeEvent(tau2, "k2=5e-2"))
 s.add_timeEvent(bs.TimeEvent(tau3, "k3=5e-2"))
-#s.simulate_ODE = True
-s.simulate(100)
+s.simulate_ODE = True
+s.simulate()
 ax = s.plot_series(products=["S000","S001","S010","S100"])
 s.show_interface()
 

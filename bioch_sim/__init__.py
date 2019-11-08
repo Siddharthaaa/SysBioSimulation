@@ -94,6 +94,8 @@ class TimeEvent(object):
         return self.name + ":" + " at " + str(self.t) + "\nAction: " + self.action 
     def __repr__(self):
         return  self.__str__()
+    def set_time(self, t):
+        self.t = t
 
 class SimParam():
     def __init__(self, name, t=200, discr_points= 1001, params={}, init_state={}):
@@ -548,6 +550,9 @@ class SimParam():
             steps = 0
             t_low = 0.
             for k, te in enumerate(t_events):
+                print("Event: ", te)
+                if t_low >= tt[-1]:
+                    break
                 if te is None:
                     t_high = tt[-1]
                 else:
@@ -608,6 +613,8 @@ class SimParam():
         y_0 = np.array(list(self.init_state.values()), dtype="float64")
         ih_old = -1
         for k, te in enumerate(t_events):
+            if t_low >= raster[-1]:
+                break
             if te is None:
                 t_high = raster[-1]
             else:
@@ -1212,7 +1219,8 @@ class SimParam():
         
         return ax
     
-    def plot_par_var_2d(self, pars = {"s1":[1,2,3], "s2": [1,2,4]},ax = None, func=None, **func_pars):
+    def plot_par_var_2d(self, pars = {"s1":[1,2,3], "s2": [1,2,4]},ax = None,
+                                      plot_args = dict(), func=None, **func_pars):
         
         names = list(pars.keys())
         params = list(pars.values())
@@ -1243,7 +1251,9 @@ class SimParam():
         if ax is None:
             fig, ax = plt.subplots()
         
-        heatmap(np.array(res), params[0], params[1], ax, cbarlabel= func.__func__.__name__ +   str(func_pars) )
+        heatmap(np.array(res), params[0], params[1], ax,
+                cbarlabel= func.__func__.__name__ +   str(func_pars),
+                **plot_args)
         ax.set_xlabel(", ".join(names[1]))
         ax.set_ylabel(", ".join(names[0]))
         
@@ -1635,7 +1645,8 @@ def compute_stochastic_evolution(state, t_max, constants, STATES, time_steps, ra
         # time step: Meine Version
         #print(a_0)
         if a_0 == 0:
-            tt = time_steps[-1]
+#            tt = time_steps[-1]
+            tt = t_max
         else:
             tt = tt - np.log(1. - r1)/a_0
         
@@ -1644,7 +1655,7 @@ def compute_stochastic_evolution(state, t_max, constants, STATES, time_steps, ra
             STATES[i,:] = state
             STATES[i,0] = time_steps[i]
             i+=1
-        if(tt > t_max):
+        if(tt >= t_max):
             break
         # find the next reaction
         prop = r2 * a_0
@@ -2130,15 +2141,19 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         s.set_param("u2_pol_br", 1) #binding rate of U2 + Pol
         s.set_param("u2_pol_ur", 0.01)
         s.set_param("u2pol_br", 1) #max binding rate of U2Pol + mRNA
-        s.set_param("u2_pol_opt_d", 20) # optimal distance from Pol2
-        s.set_param("u2_pol_opt_d_r", 10)
+        s.set_param("u2_pol_d", 20) # optimal distance from Pol2
+        s.set_param("u2_pol_d_r", 10)
         s.add_reaction("Pol_on * u2_pol_br", {"U2_Pol":[1, None]}, "Pol + U2")
         s.add_reaction("U2_Pol * u2_pol_ur", {"U2_Pol":-1}, "Pol/U2 diss.")
-        s.add_reaction("(U2_Pol * Intr1 * u2pol_br * (1-1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_1_bs_pos+0.01))**4))",
-                        {"U2_1":[1,None], "U2_Pol":-1, "Pol_pos":["u2_1_bs_pos", "-u2_1_bs_pos"]},
+        s.add_reaction("U2_Pol * u2pol_br * norm_proximity(Pol_pos-u2_pol_d, u2_1_bs_pos, u2_pol_d_r, 3)",
+                        {"U2_1":[1,None], "U2_Pol":-1,
+                         "Pol_pos":["u2_1_bs_pos", "-u2_1_bs_pos"],
+                         "Intr1":[1,-1]},
                         "U2onPol to U2_1")
-        s.add_reaction("U2_Pol * Intr2 * u2pol_br * (1-1/(1 + u2_pol_opt_d_r /abs(Pol_pos - u2_2_bs_pos+0.01))**4) ",
-                        {"U2_2":[1,None], "U2_Pol":-1, "Pol_pos":["u2_2_bs_pos", "-u2_2_bs_pos"]},
+        s.add_reaction("U2_Pol * u2pol_br * norm_proximity(Pol_pos-u2_pol_d, u2_2_bs_pos, u2_pol_d_r, 3) ",
+                        {"U2_2":[1,None], "U2_Pol":-1,
+                         "Pol_pos":["u2_2_bs_pos", "-u2_2_bs_pos"],
+                         "Intr2":[1,-1]},
                         "U2onPol to U2_2")
         
 #        s.add_reaction()
@@ -2264,4 +2279,8 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
 
     return texts
 
+@nb.njit
+def norm_proximity(x, a , r=1 , p=2):
+    dist = abs(x-a)
+    return (1/(1+(dist/r)**p))
             
