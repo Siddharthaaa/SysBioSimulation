@@ -49,9 +49,12 @@ s.add_reaction("ks*S001", {"S001":-1, "FullIR":1})
 s.add_reaction("ks*S010", {"S010":-1, "FullIR":1})
 s.add_reaction("ks*S100", {"S100":-1, "FullIR":1})
 
-s.add_timeEvent(bs.TimeEvent(tau1, "k1=5e-2"))
-s.add_timeEvent(bs.TimeEvent(tau2, "k2=5e-2"))
-s.add_timeEvent(bs.TimeEvent(tau3, "k3=5e-2"))
+te1= bs.TimeEvent(tau1, "k1=5e-2")
+te2= bs.TimeEvent(tau2, "k2=5e-2")
+te3= bs.TimeEvent(tau3, "k3=5e-2")
+s.add_timeEvent(te1)
+s.add_timeEvent(te2)
+s.add_timeEvent(te3)
 s.simulate_ODE = True
 s.simulate()
 ax = s.plot_series(products=["S000","S001","S010","S100"])
@@ -72,23 +75,26 @@ ax2.legend(loc=7)
 #s.add_reaction("d*S101", {"S101":-1})
 #s.add_reaction("d*S111", {"S111":-1})
 
-
-elvs = np.linspace(10,100,51)
+te1.set_action("k1=5")
+te2.set_action("k2=0.05")
+te3.set_action("k3=5")
+s.compile_system()
+elvs = np.linspace(1,100,51)
 s.simulate_ODE=False
 taus = np.linspace(0,2,51)
-
+s.set_runtime(1e6)
 #for tau in taus:
-for i in range(20):
+for i in range(10):
     psis = []
     for v0 in elvs:        
     #    tau1 = tau
         tau1 = 212/v0
         tau2 = tau1*445/212;   
         tau3 = tau1*692/212;
-        s.delete_timeEvents()
-        s.add_timeEvent(bs.TimeEvent(tau1, "k1=5"))
-        s.add_timeEvent(bs.TimeEvent(tau2, "k2=0.05"))
-        s.add_timeEvent(bs.TimeEvent(tau3, "k3=5"))
+#        s.delete_timeEvents()
+        te1.set_time(tau1)
+        te2.set_time(tau2)
+        te3.set_time(tau3)
         s.simulate()
         psi = s.get_psi_mean(ignore_fraction=0.5)
         print("PSI: ", psi)

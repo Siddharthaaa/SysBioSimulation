@@ -96,6 +96,8 @@ class TimeEvent(object):
         return  self.__str__()
     def set_time(self, t):
         self.t = t
+    def set_action(self, a):
+        self.action = a
 
 class SimParam():
     def __init__(self, name, t=200, discr_points= 1001, params={}, init_state={}):
