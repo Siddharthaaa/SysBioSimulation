@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Nov  7 14:30:21 2019
+
+@author: timur
+"""
+
+import gillespy2 as g2
+import numpy as np
+import bioch_sim as bs
+import pylab as plt
+
+
+runtime = 1e4
+
+class SplicingSimple(g2.Model):
+    def __init__(self, parameter_values=None):
+        # First call the gillespy2.Model initializer.
+        g2.Model.__init__(self, name='Splicing')
+
+        # Define parameters for the rates of creation and dissociation.
+        vsyn = g2.Parameter(name='vsyn', expression=100)
+        s1 = g2.Parameter(name='s1', expression=1)
+        s2 = g2.Parameter(name='s2', expression=1)
+        s3 = g2.Parameter(name='s3', expression=1)
+        d0 = g2.Parameter(name='d0', expression=1)
+        d1 = g2.Parameter(name='d1', expression=0.1)
+        d2 = g2.Parameter(name='d2', expression=0.1)
+        d3 = g2.Parameter(name='d3', expression=1)
+        
+        self.add_parameter([vsyn, s1, s2, s3, d0, d1, d2, d3])
+
+        # Define variables for the molecular species representing M and D.
+        mRNA = g2.Species(name='mRNA', initial_value=0)
+        incl = g2.Species(name='Incl',   initial_value=0)
+        skip = g2.Species(name="Skip", initial_value=0)
+        ret = g2.Species(name="ret", initial_value=0)
+        
+        self.add_species([mRNA, incl, skip, ret])
+
+        # The list of reactants and products for a Reaction object are each a
+        # Python dictionary in which the dictionary keys are Species objects
+        # and the values are stoichiometries of the species in the reaction.
+        tr = g2.Reaction(name="transcription", propensity_function="vsyn", reactants={}, products={mRNA:1})
+        spl_i = g2.Reaction(name="Inclusion", propensity_function="s1*mRNA", reactants={mRNA:1}, products={incl:1})
+        spl_s = g2.Reaction(name="Skipping", propensity_function="s2*mRNA", reactants={mRNA:1}, products={skip:1})
+        spl_r = g2.Reaction(name="retention", propensity_function="s3*mRNA", reactants={mRNA:1}, products={ret:1})
+        d_mRNA = g2.Reaction(name="mRNA degr", propensity_function="d0*mRNA", reactants={mRNA:1}, products={})
+        d_incl = g2.Reaction(name="incl degr", rate=d1, reactants={incl:1}, products={})
+        d_skip = g2.Reaction(name="skip degr", rate=d2, reactants={skip:1}, products={})
+        d_ret = g2.Reaction(name="ret degr", rate=d3, reactants={ret:1}, products={})
+        self.add_reaction([tr, spl_i, spl_s, spl_r, d_mRNA, d_incl, d_skip, d_ret])
+
+        # Set the timespan for the simulation.
+        self.timespan(np.linspace(0, runtime, 101))
+        
+s1 = SplicingSimple()
+s_res = s1.run()
+#plt.plot(s_res[0][:,0], s_res[0][:,2], '-r', label='Incl')
+#plt.plot(s_res[0][:,0], s_res[0][:,3], '-b', label='Skip')
+s_res.plot()
+
+s2 = bs.get_exmpl_sim("basic")
+s2.set_runtime(runtime)
+s2.set_raster(101)
+s2.compile_system(dynamic=True)
+s2.simulate_ODE = False
+s2.simulate()
+s2.plot_course()
