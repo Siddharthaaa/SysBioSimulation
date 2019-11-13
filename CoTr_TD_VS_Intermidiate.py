@@ -13,33 +13,131 @@ import support_th as sth
 
 import numpy as np
 
-sims_count = 100
+sims_count = 10
 
-gene_length = 1000 #nt
+gene_length = 800 #nt
 init_mol_count = 1000
-k=2
-l=2
-m = 2
-n = 3
+
+#select model:
+# 1: unbranched few steps
+# 2: unbranched many steps
+
+# 3: branched late inh few steps
+# 4: branched late inh many steps
+
+# 5: branched early inh few steps
+# 6: branched early inh many steps
+
+# 7: branched early inh bell few steps
+# 8: branched early inh bell many steps
+
+
+model_id = 7
+
+k_elongs = np.logspace(0,3.2,40)
+
+kesc = 0
+
+if model_id == 1:
+    k = 2
+    l = 0
+    m = 0
+    n = 2
+    ki = 5e-2
+    ks = 5e-1
+
+
+if model_id == 2:
+    k = 40
+    l = 0
+    m = 0
+    n = 40
+    ki = 5e-2
+    ks = 5e-1
+
+if model_id == 3:
+    k=2
+    l=3
+    m = 1
+    n = 2
+    
+    ki = 5e-2
+    ks = 1e-3
+    kesc = 0.5
+
+if model_id == 4:
+    k=20
+    l=30
+    m = 10
+    n = 20
+    
+    ki = 5e-2
+    ks = 1e-3
+    kesc = 0.5
+
+if model_id == 5:
+    k=0
+    l=1
+    m = 4
+    n = 3
+    
+    ki = 1e-1
+    ks = 1e-2
+    kesc = 0.5
+    k_elongs = np.logspace(0,3,40)
+
+if model_id == 6:
+    k=0
+    l=10
+    m = 40
+    n = 30
+    
+    ki = 1e-1
+    ks = 1e-2
+    kesc = 0.5
+    k_elongs = np.logspace(0,3,40)
+    
+
+if model_id == 7:
+    k=0
+    l=1
+    m = 5
+    n = 2
+    
+    ki = 1e-1
+    ks = 2e-1
+    kesc = 2e-1
+    k_elongs = np.logspace(0,3.2,40)
+
+if model_id == 8:
+    k=0
+    l=10
+    m = 50
+    n = 20
+    
+    ki = 1e-1
+    ks = 2e-1
+    kesc = 2e-1
+    k_elongs = np.logspace(0,3,40)
+
+
 chain_len = k+l+m+n
 
-vpol = 100. # nt/s
-ki = 5e-2
-ks = 1e-2
-kesc = 0.3
+vpol = 50. # nt/s
+
 #kesc = 10
-runtime = 1000
-k_elongs = np.logspace(1,3,31)
+runtime = 10000
+
 
 avg_tr_time = gene_length/vpol
 kelong = (k+l+m+n)/avg_tr_time
 s1 = bs.SimParam("CoTrSpl_general",
                  runtime, 10001,
-                 dict(k_elong=kelong,  ki = ki, ks = ks, kesc = kesc),
+                 dict(k_elong=kelong,  ki = ki, ks = ks, kesc = kesc, d=1),
                  dict(p1=init_mol_count, Incl = 0, Skip = 0))
 
 #s1.add_reaction("vsyn", {"p1":1})
-for i in range(1, k+l+n+m):
+for i in range(1, chain_len):
     p1 = "p" + str(i)
     p2 = "p" + str(i+1)
 #    e1 = "e" + str(i)
@@ -49,7 +147,7 @@ for i in range(1, k+l+n+m):
 #    s1.add_reaction("k_elong*" + e1, {e1:-1, e2:1})
 s1.add_reaction("ki *" + p2, {p2:-1, "Incl":1})
 
-for i in range(k+1, k+l+m+n):
+for i in range(k+1, chain_len):
     e1 = "e" + str(i)
     e2 = "e" + str(i+1)
     s1.add_reaction("k_elong*" + e1, {e1:-1, e2:1})
@@ -59,7 +157,7 @@ for i in range(k, k+l):
     e = "e" + str(i+1)
     s1.add_reaction("kesc*" + p, {p:-1, e:1})
 
-for i in range(k+l+m, k+l+m+n):
+for i in range(k+l+m, chain_len):
     p = "p" + str(i+1)
     e = "e" + str(i+1)
     s1.add_reaction("ks*" + p, {p:-1, "Skip":1})
@@ -93,24 +191,24 @@ s1.add_timeEvent(te1)
 s1.add_timeEvent(te2)
 s1.add_timeEvent(te3)
 
-s1.draw_pn(engine="dot", rates=False)
+#s1.draw_pn(engine="dot", rates=False)
 td_sim = s1
 #s1.show_interface()
 # Plot many realizations
 ax = None
-fig, ax = plt.subplots()
 psis_all1 = np.zeros((int(sims_count), len(k_elongs)))
 psis_all2 = np.zeros((int(sims_count), len(k_elongs)))
 
 for i in range(sims_count):
     for j, vpol in enumerate(k_elongs):
+        # step model
         avg_tr_time = gene_length/vpol
         kelong = (k+l+m+n)/avg_tr_time
         step_sim.set_param("k_elong", kelong)
         step_sim.simulate()
         psis_all1[i,j] = step_sim.get_psi_mean()
         
-        
+        # time delays model
         tau1 = avg_tr_time/chain_len*k
         tau2 = avg_tr_time/chain_len*(k+l)
         tau3 = avg_tr_time/chain_len*(k+l+m)
@@ -120,13 +218,58 @@ for i in range(sims_count):
         td_sim.simulate()
         psis_all2[i,j] = td_sim.get_psi_mean()
 
-ax.boxplot(psis_all1, labels = k_elongs)
-ax.boxplot(psis_all2, labels = k_elongs)
+#psis_diff = psis_all1 - psis_all2
+        
+labels = ["%.2f" % x for x in k_elongs]        
+fig, ax = plt.subplots()
+out1 = ax.boxplot(psis_all1, labels = labels, sym = "")
+out2 = ax.boxplot(psis_all2,  labels = labels, sym = "")
+plt.xticks(rotation=60)
+
+for key, val in out1.items():
+    for line in val:
+        line.set_color("red")
+        line.set_lw(2)
+
+for key, val in out2.items():
+    for line in val:
+        line.set_color("green")
+        line.set_lw(2)
+
+#ax.boxplot(psis_diff, labels = k_elongs)
         
 #ax.set_xscale("log")
-ax.axvline(ki, linestyle="--", color="green", label="k_elong=ki")
-ax.axvline(kesc, linestyle="--", color="red", label="k_elong=kesc")
-ax.legend()
-ax.set_title("Late strong inh.")
-ax.set_xlabel("kelong")
+#ax.axvline(ki, linestyle="--", color="green", label="k_elong=ki")
+#ax.axvline(kesc, linestyle="--", color="red", label="k_elong=kesc")
+red_l = plt.Line2D([],[], linewidth=2, color="red", label="step model")
+green_l = plt.Line2D([],[], linewidth=2, color="green", label = "time delay model")
+ax.legend(handles = [red_l, green_l])
+ax.set_title("k:%d, l:%d, m:%d, n:%d, mc:%d" % (k, l, m, n, init_mol_count))
+ax.set_xlabel("vpol (nt/s)")
 ax.set_ylabel("PSI")
+
+vpol = 50
+#draw parameters course
+fig, ax = plt.subplots(figsize=(5,2.5))
+
+avg_tr_time = gene_length/vpol
+chain_len = k+l+m+n
+tau1 = avg_tr_time/chain_len*k
+tau2 = avg_tr_time/chain_len*(k+l)
+tau3 = avg_tr_time/chain_len*(k+l+m)
+
+times = [0,tau1,tau2,tau3,avg_tr_time]
+kesc_vals = [0,kesc,0,0,0]
+ki_vals = [ki,ki,ki,ki,ki]
+ks_vals = [0,0,0,ks,ks]
+
+ax.plot(times, ki_vals, color = "green", label ="$ki$",ls="-", lw=2, drawstyle = 'steps-post')
+ax.plot(times, ks_vals, color = "red", label ="$ks$",ls="--", lw=2, drawstyle = 'steps-post')
+ax.plot(times, kesc_vals, color = "blue", label ="$kesc$",ls=":", lw=2, drawstyle = 'steps-post')
+ax.set_title("Parameters")
+ax.set_title("Parameters")
+ax.set_title("Parameters")
+ax.set_xlabel("time")
+ax.set_ylabel("value")
+ax.legend()
+fig.tight_layout()

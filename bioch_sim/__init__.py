@@ -552,7 +552,7 @@ class SimParam():
             steps = 0
             t_low = 0.
             for k, te in enumerate(t_events):
-                print("Event: ", te)
+#                print("Event: ", te)
                 if t_low >= tt[-1]:
                     break
                 if te is None:
@@ -1133,7 +1133,7 @@ class SimParam():
             color = self.colors[index-1]
             if "stoch" in res:
                 lines.append(ax.plot(stoch_res[indx,0],stoch_res[indx,index], label = name,
-                         color = color, lw = 0.5*line_width,drawstyle = 'steps')[0])
+                         color = color, lw = 0.5*line_width,drawstyle = 'steps-post')[0])
                 
             mean = np.mean(stoch_res[int(len(stoch_res)/3):,index])
             #plot mean of stoch sim
@@ -2159,6 +2159,16 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
                         "U2onPol to U2_2")
         
 #        s.add_reaction()
+        
+    elif(name == "CoTrSplicing_3"):
+        #TODO
+        # woring in progress ....................
+        s = get_exmpl_sim("CoTrSplicing_2")
+        s.set_param("rbp_pos", 1500)
+        s.set_param("rbp_radius", 100)
+        s.set_param("rbp_br", 1)
+        s.set_param("rbp_ur", 0.2)
+        
         
     return s
 
