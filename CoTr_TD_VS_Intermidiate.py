@@ -32,14 +32,14 @@ init_mol_count = 1000
 # 8: branched early inh bell many steps
 
 
-model_id = 7
+model_id = 2
 
 k_elongs = np.logspace(0,3.2,40)
 
 kesc = 0
 
 if model_id == 1:
-    k = 2
+    k = 6
     l = 0
     m = 0
     n = 2
@@ -48,10 +48,10 @@ if model_id == 1:
 
 
 if model_id == 2:
-    k = 40
+    k = 60
     l = 0
     m = 0
-    n = 40
+    n = 20
     ki = 5e-2
     ks = 5e-1
 

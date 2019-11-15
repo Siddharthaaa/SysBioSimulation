@@ -16,22 +16,61 @@ import support_th as sth
 import numpy as np
 
 
+pol_u2_mechancs = False
+RON_gene = True
+
+runtime = 60
+
+if RON_gene:
+    runtime = 20
+    gene_len = 700
+    u1_1_bs_pos = 210
+    u2_1_bs_pos = 300
+    u1_2_bs_pos = 443
+    u2_2_bs_pos = 520
+    
+    rbp_pos = 250
+    rbp_radius = 50
+    rbp_br = 0.5
+    rbp_ur = 0.08
+    rbp_hill_c = 5
+    rbp_posistions = np.linspace(50, 700, 101)
+    
+    
+    v0 = 60
+    spl_r = 0.8
+    
+    v1_1 = 0.8
+    v2_1 = 0.2
+    v1_2 = 0.1
+    v2_2 = 5
+    
+    
+else:
  # https://www.ncbi.nlm.nih.gov/pubmed/15217358
-gene_len = 3000
-u1_1_bs_pos = 150
-u2_1_bs_pos = 1500
-u1_2_bs_pos = 1700
-u2_2_bs_pos = 2800
+    gene_len = 3000
+    u1_1_bs_pos = 150
+    u2_1_bs_pos = 1500
+    u1_2_bs_pos = 1700
+    u2_2_bs_pos = 2800
+    
+    rbp_pos = 1600
+    rbp_radius = 100
+    rbp_br = 0.2
+    rbp_ur = 0.02
+    rbp_hill_c = 5
+    rbp_posistions = np.linspace(50, 3000, 201)
+    v0 = 60
+    spl_r = 0.8
+    
+    v1_1 = 0.234
+    v2_1 = 0.024
+    v1_2 = 0.012
+    v2_2 = 1.25
+#s2 = 1/(3/(v1_1+v2_2)  + 1/(spl_r))
+#s1 = 1/(3/(v1_1+v2_1)  + 3/(v1_2+v2_2) + 2/(spl_r))
 
-v0 = 60
-spl_r = 0.8
 
-v1_1 = 0.234
-v2_1 = 0.024
-v1_2 = 0.012
-v2_2 = 1.25
-s2 = 1/(3/(v1_1+v2_2)  + 1/(spl_r))
-s1 = 1/(3/(v1_1+v2_1)  + 3/(v1_2+v2_2) + 2/(spl_r))
 
 # consider https://science.sciencemag.org/content/sci/331/6022/1289/F5.large.jpg?width=800&height=600&carousel=1
 #for Ux binding rates
@@ -56,7 +95,7 @@ params = {"pr_on": 2, "pr_off" : 0.1,
         }
 
 
-s = bs.SimParam("Cotranscriptional splicing", 10000, 10001, params = params,
+s = bs.SimParam("Cotranscriptional splicing", runtime, 10001, params = params,
                 init_state = {"Pol_on":0, "Pol_off": 1,
                               "nascRNA_bc": 0,
                               "Pol_pos": 0,
@@ -74,14 +113,15 @@ s = bs.SimParam("Cotranscriptional splicing", 10000, 10001, params = params,
 [s.set_cluster(sp,(5,)) for sp in ["U1_1", "U1_2", "U2_1", "U2_2"]]
 ###########################
 # RBP parameters
-s.set_param("rbp_pos", 200)
-s.set_param("rbp_radius", 100)
-s.set_param("rbp_br", 1)
-s.set_param("rbp_ur", 0.2)
+s.set_param("rbp_pos", rbp_pos)
+s.set_param("rbp_radius", rbp_radius)
+s.set_param("rbp_br", rbp_br)
+s.set_param("rbp_ur", rbp_ur)
+s.set_param("rbp_hill_c", rbp_hill_c)
 
 s.add_reaction("pr_on * Pol_off",
                {"Pol_on":1, "Pol_off": -1,"Exon1":1, "Intr1":1,"Intr2":1,
-                "Tr_dist": "gene_len", "nascRNA_bc": "-nascRNA_bc"},
+                "Tr_dist": "gene_len", "nascRNA_bc": "-nascRNA_bc", "RBP": 0},
                name = "Transc. initiation")
 
 s.add_reaction("elong_v * Pol_on",
@@ -89,32 +129,32 @@ s.add_reaction("elong_v * Pol_on",
                name = "Elongation")
 
 #RBP reactions
-s.add_reaction("rbp_br", {"RBP":[1,None]}, "RBP binding")
+s.add_reaction("rbp_br", {"RBP":[1,None], "Pol_pos":["-rbp_pos", "rbp_pos"]}, "RBP binding")
 s.add_reaction("rbp_ur", {"RBP":-1}, "RBP unbinding")
 
 #TEST RBP reaction
-s.add_reaction("(1-norm_proximity(rbp_pos, u1_1_bs_pos, rbp_radius, 4)", {"TEST_RBP":1}, "Test RBP")
+s.add_reaction("0.2*(norm_proximity(rbp_pos, Pol_pos, rbp_radius, rbp_hill_c))", {"TEST_RBP":1}, "Test RBP")
 
 # Ux (un)binding cinetics
-s.add_reaction("u1_1_br * Intr1 * (1-RBP *norm_proximity(rbp_pos, u1_1_bs_pos, rbp_radius, 4))",
+s.add_reaction("u1_1_br * Intr1 * (1-RBP *norm_proximity(rbp_pos, u1_1_bs_pos, rbp_radius, rbp_hill_c))",
                {"U1_1":[1,None], "Intr1": [-1,1],
                 "Pol_pos":["-u1_1_bs_pos", "u1_1_bs_pos"]},
                "U1_1 binding")
 s.add_reaction("u1ur * U1_1", {"U1_1":-1}, "U1_1 diss.")
 
-s.add_reaction("u1_2_br * Intr2 * (1-RBP*norm_proximity(rbp_pos, u1_2_bs_pos, rbp_radius, 4))",
+s.add_reaction("u1_2_br * Intr2 * (1-RBP*norm_proximity(rbp_pos, u1_2_bs_pos, rbp_radius, rbp_hill_c))",
                {"U1_2":[1,None], "Intr2": [-1,1],
                 "Pol_pos":["-u1_2_bs_pos", "u1_2_bs_pos"]},
                 "U1_2 binding")
 s.add_reaction("u1ur * U1_2", {"U1_2":-1}, "U1_2 diss.")
 
-s.add_reaction("u2_1_br * Intr1 * (1-RBP*norm_proximity(rbp_pos, u2_1_bs_pos, rbp_radius, 4))",
+s.add_reaction("u2_1_br * Intr1 * (1-RBP*norm_proximity(rbp_pos, u2_1_bs_pos, rbp_radius, rbp_hill_c))",
               {"U2_1":[1,None], "Intr1": [-1,1],
                 "Pol_pos":["-u2_1_bs_pos", "u2_1_bs_pos"]},
                "U2_1 binding")
 s.add_reaction("u2ur * U2_1", {"U2_1":-1}, "U2_1 diss.")
 
-s.add_reaction("u2_2_br * Intr2 * (1-RBP*norm_proximity(rbp_pos, u2_2_bs_pos, rbp_radius, 4))",
+s.add_reaction("u2_2_br * Intr2 * (1-RBP*norm_proximity(rbp_pos, u2_2_bs_pos, rbp_radius, rbp_hill_c))",
                {"U2_2":[1,None], "Intr2": [-1,1],
                 "Pol_pos":["-u2_2_bs_pos", "u2_2_bs_pos"]},
                 "U2_2 binding")
@@ -192,22 +232,44 @@ s.add_reaction("spl_rate * U11p*ret/(ret+ret_i1) * U22p/(ret+ret_i2)",
 s.add_reaction("d1 * Incl", {"Incl": -1}, "Incl degr.")
 s.add_reaction("d2 * Skip", {"Skip": -1}, "Skip degr.")
 
-s.set_param("u2_pol_br", 1) #binding rate of U2 + Pol
-s.set_param("u2_pol_ur", 0.01)
-s.set_param("u2pol_br", 1) #max binding rate of U2Pol + mRNA
-s.set_param("u2_pol_d", 20) # optimal distance from Pol2
-s.set_param("u2_pol_d_r", 10)
-s.add_reaction("Pol_on * u2_pol_br", {"U2_Pol":[1, None]}, "Pol + U2")
-s.add_reaction("U2_Pol * u2_pol_ur", {"U2_Pol":-1}, "Pol/U2 diss.")
-s.add_reaction("U2_Pol * u2pol_br * norm_proximity(Pol_pos-u2_pol_d, u2_1_bs_pos, u2_pol_d_r, 3)",
-                {"U2_1":[1,None], "U2_Pol":-1,
-                 "Pol_pos":["u2_1_bs_pos", "-u2_1_bs_pos"],
-                 "Intr1":[1,-1]},
-                "U2onPol to U2_1")
-s.add_reaction("U2_Pol * u2pol_br * norm_proximity(Pol_pos-u2_pol_d, u2_2_bs_pos, u2_pol_d_r, 3) ",
-                {"U2_2":[1,None], "U2_Pol":-1,
-                 "Pol_pos":["u2_2_bs_pos", "-u2_2_bs_pos"],
-                 "Intr2":[1,-1]},
-                "U2onPol to U2_2")
+
+if pol_u2_mechancs:
+#Pol + U2 -> U2onPol to U2 on nascRNA
+    s.set_param("u2_pol_br", 1) #binding rate of U2 + Pol
+    s.set_param("u2_pol_ur", 0.01)
+    s.set_param("u2pol_br", 1) #max binding rate of U2Pol + mRNA
+    s.set_param("u2_pol_d", 20) # optimal distance from Pol2
+    s.set_param("u2_pol_d_r", 10)
+    s.add_reaction("Pol_on * u2_pol_br", {"U2_Pol":[1, None]}, "Pol + U2")
+    s.add_reaction("U2_Pol * u2_pol_ur", {"U2_Pol":-1}, "Pol/U2 diss.")
+    s.add_reaction("U2_Pol * u2pol_br * norm_proximity(Pol_pos-u2_pol_d, u2_1_bs_pos, u2_pol_d_r, rbp_hill_c)",
+                    {"U2_1":[1,None], "U2_Pol":-1,
+                     "Pol_pos":["u2_1_bs_pos", "-u2_1_bs_pos"],
+                     "Intr1":[1,-1]},
+                    "U2onPol to U2_1")
+    s.add_reaction("U2_Pol * u2pol_br * norm_proximity(Pol_pos-u2_pol_d, u2_2_bs_pos, u2_pol_d_r, rbp_hill_c) ",
+                    {"U2_2":[1,None], "U2_Pol":-1,
+                     "Pol_pos":["u2_2_bs_pos", "-u2_2_bs_pos"],
+                     "Intr2":[1,-1]},
+                    "U2onPol to U2_2")
 
 s.compile_system()
+#s.show_interface()
+
+##### RBP pos depending assessment ####
+
+s.set_runtime(1e6)
+psis = []
+for i, pos in enumerate(rbp_posistions):
+    print("Sim count: %d" % i)
+    s.set_param("rbp_pos", pos)
+    s.simulate()
+    psi = s.get_psi_mean(ignore_fraction = 0.4)
+    psis.append(psi)
+
+fig, ax = plt.subplots()
+ax.plot(rbp_posistions, psis)
+ax.set_xlabel("RBP pos")
+ax.set_ylabel("PSI")
+ax.set_title("u11: %d; u21: %d; u12: %d; u22: %d; Radius: %d" % 
+             (u1_1_bs_pos, u2_1_bs_pos, u1_2_bs_pos, u2_2_bs_pos, rbp_radius))
