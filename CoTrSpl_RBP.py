@@ -11,13 +11,14 @@ Created on Wed Nov 13 14:57:55 2019
 
 import bioch_sim as bs
 import matplotlib.pyplot as plt
-import support_th as sth
 
 import numpy as np
 
 
 pol_u2_mechancs = False
 RON_gene = True
+post_tr_reactions = True
+sim_series = False
 
 runtime = 60
 
@@ -203,34 +204,41 @@ s.add_reaction("elong_v",
                 "U11p":"U1_1", "U21p": "U2_1","U12p":"U1_2", "U22p": "U2_2"},
                name = "Termination: full retention")
  
+if post_tr_reactions:
 #Posttranscriptional reactions        
-s.add_reaction("(ret+ret_i1-U11p)*u1_1_br", {"U11p": 1}, "U11p binding")
-s.add_reaction("U11p*u1ur", {"U11p": -1}, "U11p unbinding")
-s.add_reaction("(ret+ret_i1-U21p)*u2_1_br", {"U21p": 1}, "U21p binding")
-s.add_reaction("U21p*u2ur", {"U21p": -1}, "U21p unbinding")
-s.add_reaction("(ret+ret_i2-U12p)*u1_2_br", {"U12p": 1}, "U12p binding")
-s.add_reaction("U12p*u1ur", {"U12p": -1}, "U12p unbinding")
-s.add_reaction("(ret+ret_i2-U22p)*u2_2_br", {"U22p": 1}, "U22p binding")
-s.add_reaction("U22p*u2ur", {"U22p": -1}, "U22p unbinding")
-
-s.add_reaction("spl_rate*U11p * U21p*ret/((ret+ret_i1)**2)",
-               {"ret": -1, "ret_i2": 1, "U11p":-1, "U21p":-1}, "PostTr. ret -> ret_i2")
-s.add_reaction("spl_rate*U11p * U21p*ret_i1/((ret+ret_i1)**2)",
-               {"ret_i1": -1, "Incl": 1, "U11p":-1, "U21p":-1}, "PostTr. ret_i1 -> Incl")
-s.add_reaction("spl_rate*U12p * U22p*ret/((ret+ret_i2)**2)",
-               {"ret": -1, "ret_i1": 1, "U12p":-1, "U22p":-1}, "PostTr. ret -> ret_i1")
-s.add_reaction("spl_rate*U12p * U22p*ret_i2/((ret+ret_i2)**2)",
-               {"ret_i2": -1, "Incl": 1, "U12p":-1, "U22p":-1}, "PostTr. ret_i2 -> Incl")
-
-s.add_reaction("spl_rate * U11p*ret/(ret+ret_i1) * U22p/(ret+ret_i2)",
-               {"ret": -1, "Skip": 1, "U11p":-1, "U22p":-1,
-                "U21p":"-round(U21p/(ret+ret_i1) if U21p > 0 else 0)",
-                "U12p":"-round(U12p/(ret+ret_i2) if U12p > 0 else 0)"},
-               "PostTr. ret -> Skip")
+    s.add_reaction("(ret+ret_i1-U11p)*u1_1_br", {"U11p": 1}, "U11p binding")
+    s.add_reaction("U11p*u1ur", {"U11p": -1}, "U11p unbinding")
+    s.add_reaction("(ret+ret_i1-U21p)*u2_1_br", {"U21p": 1}, "U21p binding")
+    s.add_reaction("U21p*u2ur", {"U21p": -1}, "U21p unbinding")
+    s.add_reaction("(ret+ret_i2-U12p)*u1_2_br", {"U12p": 1}, "U12p binding")
+    s.add_reaction("U12p*u1ur", {"U12p": -1}, "U12p unbinding")
+    s.add_reaction("(ret+ret_i2-U22p)*u2_2_br", {"U22p": 1}, "U22p binding")
+    s.add_reaction("U22p*u2ur", {"U22p": -1}, "U22p unbinding")
+    
+    #molukule probabilty having both: U11 and U21 multiplyed by ret
+    s.add_reaction("spl_rate*U11p * U21p*ret/((ret+ret_i1)**2)",
+                   {"ret": -1, "ret_i2": 1, "U11p":-1, "U21p":-1}, "PostTr. ret -> ret_i2")
+    s.add_reaction("spl_rate*U11p * U21p*ret_i1/((ret+ret_i1)**2)",
+                   {"ret_i1": -1, "Incl": 1, "U11p":-1, "U21p":-1}, "PostTr. ret_i1 -> Incl")
+    s.add_reaction("spl_rate*U12p * U22p*ret/((ret+ret_i2)**2)",
+                   {"ret": -1, "ret_i1": 1, "U12p":-1, "U22p":-1}, "PostTr. ret -> ret_i1")
+    s.add_reaction("spl_rate*U12p * U22p*ret_i2/((ret+ret_i2)**2)",
+                   {"ret_i2": -1, "Incl": 1, "U12p":-1, "U22p":-1}, "PostTr. ret_i2 -> Incl")
+    
+    s.add_reaction("spl_rate * U11p*ret/(ret+ret_i1) * U22p/(ret+ret_i2)",
+                   {"ret": -1, "Skip": 1, "U11p":-1, "U22p":-1,
+#                    "U21p":"-round(U21p/(ret+ret_i1) if U21p > 0 else 0)",
+#                    "U12p":"-round(U12p/(ret+ret_i2) if U12p > 0 else 0)"},
+                    "U21p":"-int(U21p/(ret+ret_i1) > random.random()) if U21p > 0 else 0",
+                    "U12p":"-int(U12p/(ret+ret_i2) > random.random()) if U12p > 0 else 0"},
+                   "PostTr. ret -> Skip")
 
 #Degradation
 s.add_reaction("d1 * Incl", {"Incl": -1}, "Incl degr.")
 s.add_reaction("d2 * Skip", {"Skip": -1}, "Skip degr.")
+#s.add_reaction("d3 * ret", {"ret": -1}, "ret degr.")
+#s.add_reaction("d3 * ret_i1", {"ret_i1": -1}, "ret_i1 degr.")
+#s.add_reaction("d3 * ret_i2", {"ret_i2": -1}, "ret_i2 degr")
 
 
 if pol_u2_mechancs:
@@ -254,22 +262,22 @@ if pol_u2_mechancs:
                     "U2onPol to U2_2")
 
 s.compile_system()
-#s.show_interface()
+s.show_interface()
 
 ##### RBP pos depending assessment ####
-
-s.set_runtime(1e6)
-psis = []
-for i, pos in enumerate(rbp_posistions):
-    print("Sim count: %d" % i)
-    s.set_param("rbp_pos", pos)
-    s.simulate()
-    psi = s.get_psi_mean(ignore_fraction = 0.4)
-    psis.append(psi)
-
-fig, ax = plt.subplots()
-ax.plot(rbp_posistions, psis)
-ax.set_xlabel("RBP pos")
-ax.set_ylabel("PSI")
-ax.set_title("u11: %d; u21: %d; u12: %d; u22: %d; Radius: %d" % 
-             (u1_1_bs_pos, u2_1_bs_pos, u1_2_bs_pos, u2_2_bs_pos, rbp_radius))
+if sim_series:
+    s.set_runtime(1e6)
+    psis = []
+    for i, pos in enumerate(rbp_posistions):
+        print("Sim count: %d" % i)
+        s.set_param("rbp_pos", pos)
+        s.simulate()
+        psi = s.get_psi_mean(ignore_fraction = 0.4)
+        psis.append(psi)
+    
+    fig, ax = plt.subplots()
+    ax.plot(rbp_posistions, psis)
+    ax.set_xlabel("RBP pos")
+    ax.set_ylabel("PSI")
+    ax.set_title("u11: %d; u21: %d; u12: %d; u22: %d; Radius: %d" % 
+                 (u1_1_bs_pos, u2_1_bs_pos, u1_2_bs_pos, u2_2_bs_pos, rbp_radius))

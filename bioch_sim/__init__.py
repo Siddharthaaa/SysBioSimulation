@@ -76,12 +76,15 @@ class TimeEvent(object):
     
     _count = 0    
     def __init__(self, t, a, name = None):
+        self._id = TimeEvent._count
         if (name is None):
-            name = "TimeEvent" + str(TimeEvent._count + 1)
+            name = "TimeEvent" + str(TimeEvent._count)
             TimeEvent._count+=1
         self.name = name
-        self.t = t
+        self.consts = None
+        self.set_time(t)
         self.action = a
+        
     def __lt__(self, te):
         return self.t < te.t
     def __le__(self, te):
@@ -98,6 +101,31 @@ class TimeEvent(object):
         self.t = t
     def set_action(self, a):
         self.action = a
+    def set_constants(self, consts):
+        self.consts = consts
+        if(self.__t_str is not None):
+            self.__update_expr()
+    def __update_expr(self):
+        s = self.__t_str
+        for  k, v in self.consts.items():
+            s = re.sub("\\b" + k + "\\b", "%s[\"%s\"]" % ("self.consts",k), s)
+        self.__expr_str = s
+        
+    def __get_t(self):
+        if(self.__t_str is not None):
+#            print(self.__expr_str)
+            return eval(self.__expr_str)
+        else:
+            return self.__t
+    def __set_t(self, t):
+        if(type(t) is str):
+            self.__t_str = t
+            if(self.consts is not None):
+                self.__update_expr()
+        else:
+            self.__t = t
+            self.__t_str = None
+    t = property(__get_t, __set_t)
 
 class SimParam():
     def __init__(self, name, t=200, discr_points= 1001, params={}, init_state={}):
@@ -166,8 +194,9 @@ class SimParam():
 #    @nb.jit  # causes performance drops
         
     def add_timeEvent(self, te):
+        te.set_constants(self.params)
         self._time_events.append(te)
-        self._time_events = sorted(self._time_events)
+#        self._time_events = sorted(self._time_events)
     def delete_timeEvents(self):
         self._time_events = []
     def get_rates(self, state=None):
@@ -479,7 +508,7 @@ class SimParam():
         s += "def time_event(n, st, pars):\n"
         
         for i, te in enumerate(sorted(events)):
-            s += "\tif n == %d:\n" % i
+            s += "\tif n == %d:\n" % te._id
             s += "\t\t" + te.action + "\n"
         s += "\treturn None\n"
         s += "self._time_events_f = time_event"
@@ -541,7 +570,7 @@ class SimParam():
         self._constants = np.array(list(self.params.values()))
         dim = (len(tt),) + self._state.shape
         _last_results = []
-        t_events = self._time_events.copy()
+        t_events = sorted(self._time_events.copy())
         t_events.append(None)
         
         for i in range(tr_count):
@@ -578,9 +607,9 @@ class SimParam():
                                                       nb.int64(max_steps))
                 if te is not None:
                     state[0] = te.t
-#                    print(steps)
-#                    print("EVENT ",k)
-                    self._time_events_f(k, state, self._constants)
+                    print(steps)
+                    print("EVENT ",te._id)
+                    self._time_events_f(te._id, state, self._constants)
                 t_low = t_high
             _last_results.append(STATES)
             t = time.time() - t
@@ -636,7 +665,7 @@ class SimParam():
             print("Res Shape: ", res.shape)
             y_0 = np.insert(res[-1], 0, t_high)
             if te is not None:
-                self._time_events_f(k, y_0, self._constants)
+                self._time_events_f(te._id, y_0, self._constants)
             y_0 = np.delete(y_0, 0)
             res = np.delete(res, [0,len(res)-1],0)
             if(ih_old == il):
@@ -1638,7 +1667,6 @@ def compute_stochastic_evolution(state, t_max, constants, STATES, time_steps, ra
         j+=1
 #        r1, r2 = np.random.uniform(0,1,2)
 #        print(reactions)
-#        for blabal in range(1000):
         pre_upd_f(state, constants, pre)
         post_upd_f(state, constants, post)
         a_s = rate_func(state, constants, rates_array, pre)
@@ -2162,7 +2190,7 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         
     elif(name == "CoTrSplicing_3"):
         #TODO
-        # woring in progress ....................
+        # working in progress ....................
         s = get_exmpl_sim("CoTrSplicing_2")
         s.set_param("rbp_pos", 1500)
         s.set_param("rbp_radius", 100)
@@ -2294,5 +2322,8 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
 @nb.njit
 def norm_proximity(x, a , r=1 , p=2):
     dist = abs(x-a)
-    return (1/(1+(dist/r)**p))
+    if p > 0:
+        return (1/(1+(dist/r)**p))
+    else:
+        return int(dist<=r)
             

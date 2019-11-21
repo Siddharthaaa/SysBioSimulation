@@ -32,7 +32,8 @@ init_mol_count = 1000
 # 8: branched early inh bell many steps
 
 
-model_id = 2
+
+model_id = 7
 
 k_elongs = np.logspace(0,3.2,40)
 
@@ -45,6 +46,11 @@ if model_id == 1:
     n = 2
     ki = 5e-2
     ks = 5e-1
+#    
+#    psi_slow = 1
+#    psi_fast = ki/(ki+ks)
+#    psi_inter = 0
+
 
 
 if model_id == 2:
@@ -64,6 +70,10 @@ if model_id == 3:
     ki = 5e-2
     ks = 1e-3
     kesc = 0.5
+    
+#    psi_slow = 1
+#    psi_fast = ki/(ki+ks)
+#    psi_inter = ki/(ki+kesc)
 
 if model_id == 4:
     k=20
@@ -74,6 +84,7 @@ if model_id == 4:
     ki = 5e-2
     ks = 1e-3
     kesc = 0.5
+    
 
 if model_id == 5:
     k=0
@@ -85,6 +96,10 @@ if model_id == 5:
     ks = 1e-2
     kesc = 0.5
     k_elongs = np.logspace(0,3,40)
+    
+#    psi_slow = ki/(ki+kesc)
+#    psi_fast = ki/(ki+ks)
+#    psi_inter = ki/(ki+kesc)
 
 if model_id == 6:
     k=0
@@ -120,11 +135,34 @@ if model_id == 8:
     kesc = 2e-1
     k_elongs = np.logspace(0,3,40)
 
+def psi_analyticaly(vpol, gene_length, k, l , m, n, ki, ks, kesc):
+    avg_tr_time = gene_length/vpol
+    kelong = (k+l+m+n)/avg_tr_time
+    
+    A1 = ki*k/kelong
+    pi1 = 1-np.exp(-A1)
+    A23 = (ki+kesc)*l/kelong
+    pis2 = (1-pi1)*(1-np.exp(-A23))
+    pi2 = pis2*ki/(ki+kesc)
+    A4 = ki*m/kelong
+    pi3 = (1-pi1 - pis2) * (1-np.exp(-A4))
+    pi4 = (1 - pi1 -pis2-pi3)*ki/(ki+ks)
+    
+    pi = pi1 + pi2 + pi3 + pi4
+    
+    return pi
+
+kl = k+l
+psi_inter =kl*ki/(kl*ki + l*kesc) 
+if(k == 0):
+    psi_slow = ki/(ki+kesc)
+else:
+    psi_slow = ki/ki
+
+psi_fast = ki/(ki+ks)
 
 chain_len = k+l+m+n
-
 vpol = 50. # nt/s
-
 #kesc = 10
 runtime = 10000
 
@@ -236,20 +274,29 @@ for key, val in out2.items():
         line.set_color("green")
         line.set_lw(2)
 
+leg_els = []
+leg_els.append(ax.axhline(psi_slow, linestyle="--", lw=1.5, color="green", label = "PSI slow"))
+leg_els.append(ax.axhline(psi_fast, linestyle="-.", lw=1.5, color="red", label = "PSI fast"))
+leg_els.append(ax.axhline(psi_inter, linestyle=":", lw=1.5, color="blue", label = "PSI inter"))
 #ax.boxplot(psis_diff, labels = k_elongs)
         
 #ax.set_xscale("log")
 #ax.axvline(ki, linestyle="--", color="green", label="k_elong=ki")
 #ax.axvline(kesc, linestyle="--", color="red", label="k_elong=kesc")
-red_l = plt.Line2D([],[], linewidth=2, color="red", label="step model")
-green_l = plt.Line2D([],[], linewidth=2, color="green", label = "time delay model")
-ax.legend(handles = [red_l, green_l])
+red_l = plt.Line2D([],[], linewidth=3, color="red", label="step model")
+green_l = plt.Line2D([],[], linewidth=3, color="green", label = "time delay model")
+ax.legend(handles = [red_l, green_l] + leg_els)
 ax.set_title("k:%d, l:%d, m:%d, n:%d, mc:%d" % (k, l, m, n, init_mol_count))
 ax.set_xlabel("vpol (nt/s)")
 ax.set_ylabel("PSI")
 
-vpol = 50
+psis_analyt = psi_analyticaly(k_elongs, gene_length, k, l, m, n,ki,ks,kesc) 
+fig, ax = plt.subplots()
+ax.plot(k_elongs, psis_analyt)
+ax.set_xscale("log")
+
 #draw parameters course
+vpol = 50
 fig, ax = plt.subplots(figsize=(5,2.5))
 
 avg_tr_time = gene_length/vpol
