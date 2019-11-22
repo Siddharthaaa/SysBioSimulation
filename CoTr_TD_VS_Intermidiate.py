@@ -33,7 +33,7 @@ init_mol_count = 1000
 
 
 
-model_id = 7
+model_id = 0
 
 k_elongs = np.logspace(0,3.2,40)
 
@@ -135,6 +135,17 @@ if model_id == 8:
     kesc = 2e-1
     k_elongs = np.logspace(0,3,40)
 
+if model_id == 0:
+    k=0
+    l=10
+    m = 20
+    n = 2
+    
+    ki = 1e-1
+    ks = 2e-1
+    kesc = 2e-1
+    k_elongs = np.logspace(0,3.2,40)
+
 def psi_analyticaly(vpol, gene_length, k, l , m, n, ki, ks, kesc):
     avg_tr_time = gene_length/vpol
     kelong = (k+l+m+n)/avg_tr_time
@@ -152,8 +163,10 @@ def psi_analyticaly(vpol, gene_length, k, l , m, n, ki, ks, kesc):
     
     return pi
 
-kl = k+l
-psi_inter =kl*ki/(kl*ki + l*kesc) 
+klm = k+l+m
+psi_inter =klm*ki/(klm*ki + l*kesc)
+#psi_inter =ki/(ki+kesc)
+ 
 if(k == 0):
     psi_slow = ki/(ki+kesc)
 else:

@@ -2322,7 +2322,7 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
 @nb.njit
 def norm_proximity(x, a , r=1 , p=2):
     dist = abs(x-a)
-    if p > 0:
+    if p != 0:
         return (1/(1+(dist/r)**p))
     else:
         return int(dist<=r)

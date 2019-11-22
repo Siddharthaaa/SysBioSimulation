@@ -21,9 +21,9 @@ sim_series = False
 plot_3d_series = True
 
 runtime = 60
-init_mol_count = 10000
+init_mol_count = 100000
 
-factor = 1
+factor = 2
 
 if RON_gene:
     runtime = 20
@@ -41,7 +41,7 @@ if RON_gene:
     
     
     rbp_br = 0.2 * factor
-    rbp_ur = 0.02 * factor
+    rbp_ur = 0.04 * factor
 #    rbp_br = 20 * factor
 #    rbp_ur = 0.0 * factor
     
@@ -169,22 +169,26 @@ if sim_series:
         psis.append(psi)
     
     fig, ax = plt.subplots()
-    ax.plot(rbp_posistions, psis)
+    ax.plot(rbp_posistions, psis, lw=2)
     ax.set_xlabel("RBP pos")
     ax.set_ylabel("PSI")
     ax.set_title("u11: %d; u21: %d; u12: %d; u22: %d; Radius: %d" % 
                  (u1_1_bs_pos, u2_1_bs_pos, u1_2_bs_pos, u2_2_bs_pos, rbp_radius))
-    ax.axvline(u1_1_bs_pos, label="U11", linestyle=".", color = "red")
-    ax.axvline(u2_1_bs_pos, label="U21", linestyle=".", color = "red")
-    ax.axvline(u1_2_bs_pos, label="U12", linestyle=".", color = "red")
-    ax.axvline(u2_2_bs_pos, label="U22", linestyle=".", color = "red")
-
+    ax.axvline(u1_1_bs_pos, label="U11", linestyle="-.",lw =0.7)#, color = "red")
+    ax.axvline(u2_1_bs_pos, label="U21", linestyle="-.",lw =0.7)#, color = "red")
+    ax.axvline(u1_2_bs_pos, label="U12", linestyle="-.", lw =0.7)#, color = "red")
+    ax.axvline(u2_2_bs_pos, label="U22", linestyle="-.", lw =0.7)#, color = "red")
+    ax.legend()
+    ax2 = ax.twinx()
+    inh_curve_u11 = [bs.norm_proximity(rbp_p, u1_1_bs_pos, rbp_radius, rbp_hill_c) for rbp_p in rbp_posistions]
+    ax2.plot(rbp_posistions,inh_curve_u11, label = "Inh. range", linestyle=":", color="red")
+    ax2.legend()
 
 if plot_3d_series:
 
     s.set_runtime(1e4)
     vpols = np.linspace(1,100,100)
-    rbp_poss = np.linspace(50, 650, 120)
+    rbp_poss = np.linspace(50, 650, 121)
     X, Y = np.meshgrid(rbp_poss, vpols)
     
     res = s.plot_par_var_2d(pars=dict(vpol=vpols, rbp_pos=rbp_poss),
@@ -199,8 +203,20 @@ if plot_3d_series:
     ax.set_ylabel("vpol [nt/s]")
     ax.set_zlabel("PSI")
     
+    step = 10
+    indx_x = np.arange(0, len(rbp_poss)-1, step)
+    indx_y = np.arange(0, len(vpols)-1, step)
     
     fig, ax  = plt.subplots()
-    ax.imshow(Z)
+    im = ax.imshow(Z)
+    cbar = ax.figure.colorbar(im, ax=ax)
+    cbar.ax.set_ylabel("PSI", rotation=-90, va="bottom")
+    ax.set_xticks(indx_x)
+    ax.set_yticks(indx_y)
+    # ... and label them with the respective list entries.
+    col_labels = rbp_poss[indx_x]
+    row_labels = vpols[indx_y]
+    ax.set_xticklabels(col_labels, fontsize = 10, rotation=60)
+    ax.set_yticklabels(row_labels, fontsize = 10)
    
 
