@@ -16,12 +16,12 @@ import numpy as np
 
 
 extended_model = False
-RON_gene = True
+RON_gene = False
 sim_series = False
 plot_3d_series = True
 
 runtime = 60
-init_mol_count = 100000
+init_mol_count = 10000
 
 factor = 2
 
@@ -45,20 +45,40 @@ if RON_gene:
 #    rbp_br = 20 * factor
 #    rbp_ur = 0.0 * factor
     
-    rbp_hill_c = 15
-    
-    
+    rbp_hill_c = 0
     
     rbp_posistions = np.linspace(0, 650, 201)
     
-    
     vpol = 60
-    spl_r = 0.8
-    
+#    spl_r = 0.8
 #    v1_1 = 0.8
 #    v2_1 = 0.2
 #    v1_2 = 0.1
 #    v2_2 = 5
+else: #experimental parameters
+    runtime = 20
+    gene_len = 700
+    u1_1_bs_pos = 210
+    u2_1_bs_pos = 300
+    u1_2_bs_pos = 443
+    u2_2_bs_pos = 520
+    
+    spl_i_tau = 2
+    spl_s_tau = 5 
+    
+    rbp_pos = 250
+    rbp_radius = 40
+    
+    
+    rbp_br = 1
+    rbp_ur = 0.0002 
+#    rbp_br = 20 * factor
+#    rbp_ur = 0.0 * factor
+    
+    rbp_hill_c = 15
+    
+    rbp_posistions = np.linspace(0, 650, 201)
+    vpol = 60
 
     
 params = {"vpol": vpol,
@@ -187,8 +207,8 @@ if sim_series:
 if plot_3d_series:
 
     s.set_runtime(1e4)
-    vpols = np.linspace(1,100,100)
-    rbp_poss = np.linspace(50, 650, 121)
+    vpols = np.linspace(1,400,100)
+    rbp_poss = np.linspace(50, 650, 61)
     X, Y = np.meshgrid(rbp_poss, vpols)
     
     res = s.plot_par_var_2d(pars=dict(vpol=vpols, rbp_pos=rbp_poss),

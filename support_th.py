@@ -810,6 +810,35 @@ def filter_assumed_hkg(df = None, psi = (0.2, 0.8), counts_max_cv = 0.2,
 def norm_dist(x, a , r=1 , p=2):
     dist = abs(x-a)
     return 1 - (1/(1+(dist/r)**p))
+
+def numerical_derivation(x, y):
+    if len(x) != len(x):
+        raise Exception("arrays dont have the same length")
+    l = len(x)
+    res = np.zeros(l)
+    for i in range(l):
+        if(i<l-1):
+            res[i] = (y[i+1] - y[i])/(x[i+1] - x[i])
+        else:
+            res[i] = res[i-1] + (res[i-1] - res[i-2])
+#            res[i] = res[i-1]
+    return res
+
+def get_zero_points(x, y):
+    if len(x) != len(y):
+        raise Exception("arrays dont have the same length")
+    l = len(x)
+    res_x = []
+    for i in range(l-1):
+        r = y[i] * y[i+1]
+        if(r <=0 ): # intersection
+            #interpolation
+            yd = abs(y[i]) + abs(y[i+1])
+            frac = abs(y[i])/yd
+            xd = x[i] + frac * (x[i+1] - x[i] )
+            res_x.append(xd)
+    
+    return np.array(res_x)
     
 if __name__ == "__main__":
     None

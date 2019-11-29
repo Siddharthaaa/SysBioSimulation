@@ -31,13 +31,11 @@ init_mol_count = 1000
 # 7: branched early inh bell few steps
 # 8: branched early inh bell many steps
 
-
-
-model_id = 0
+model_id = 3
 
 k_elongs = np.logspace(0,3.2,40)
 
-kesc = 0
+kesc = 1
 
 if model_id == 1:
     k = 6
@@ -46,6 +44,7 @@ if model_id == 1:
     n = 2
     ki = 5e-2
     ks = 5e-1
+    kesc = 0
 #    
 #    psi_slow = 1
 #    psi_fast = ki/(ki+ks)
@@ -136,13 +135,13 @@ if model_id == 8:
     k_elongs = np.logspace(0,3,40)
 
 if model_id == 0:
-    k=0
-    l=10
-    m = 20
-    n = 2
+    k=1
+    l=20
+    m = 1
+    n = 1
     
     ki = 1e-1
-    ks = 2e-1
+    ks = 1e-2
     kesc = 2e-1
     k_elongs = np.logspace(0,3.2,40)
 
@@ -155,6 +154,7 @@ def psi_analyticaly(vpol, gene_length, k, l , m, n, ki, ks, kesc):
     A23 = (ki+kesc)*l/kelong
     pis2 = (1-pi1)*(1-np.exp(-A23))
     pi2 = pis2*ki/(ki+kesc)
+#    pi2 = 1-np.exp(-ki*l/kelong)
     A4 = ki*m/kelong
     pi3 = (1-pi1 - pis2) * (1-np.exp(-A4))
     pi4 = (1 - pi1 -pis2-pi3)*ki/(ki+ks)
@@ -164,7 +164,7 @@ def psi_analyticaly(vpol, gene_length, k, l , m, n, ki, ks, kesc):
     return pi
 
 klm = k+l+m
-psi_inter =klm*ki/(klm*ki + l*kesc)
+psi_inter =l*ki/(l*ki+ l*kesc)
 #psi_inter =ki/(ki+kesc)
  
 if(k == 0):
@@ -303,12 +303,20 @@ ax.set_title("k:%d, l:%d, m:%d, n:%d, mc:%d" % (k, l, m, n, init_mol_count))
 ax.set_xlabel("vpol (nt/s)")
 ax.set_ylabel("PSI")
 
+
+#plot analytical solution
 psis_analyt = psi_analyticaly(k_elongs, gene_length, k, l, m, n,ki,ks,kesc) 
 fig, ax = plt.subplots()
-ax.plot(k_elongs, psis_analyt)
-ax.set_xscale("log")
+ax.plot(k_elongs, psis_analyt, lw=2)
+#ax.set_xscale("log")
+kelong = kesc*l
+vpol_kesc = gene_length*kelong/(k+l+m+n)
+ax.axvline(vpol_kesc, label="kesc=kelong")
+ax.axhline(psi_slow, linestyle="--", lw=1.5, color="green", label = "PSI slow")
+ax.axhline(psi_fast, linestyle="-.", lw=1.5, color="red", label = "PSI fast")
+ax.axhline(psi_inter, linestyle=":", lw=1.5, color="blue", label = "PSI inter")
 
-#draw parameters course
+#plot parameters course
 vpol = 50
 fig, ax = plt.subplots(figsize=(5,2.5))
 
@@ -327,8 +335,7 @@ ax.plot(times, ki_vals, color = "green", label ="$ki$",ls="-", lw=2, drawstyle =
 ax.plot(times, ks_vals, color = "red", label ="$ks$",ls="--", lw=2, drawstyle = 'steps-post')
 ax.plot(times, kesc_vals, color = "blue", label ="$kesc$",ls=":", lw=2, drawstyle = 'steps-post')
 ax.set_title("Parameters")
-ax.set_title("Parameters")
-ax.set_title("Parameters")
+
 ax.set_xlabel("time")
 ax.set_ylabel("value")
 ax.legend()
