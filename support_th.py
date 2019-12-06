@@ -831,7 +831,7 @@ def get_zero_points(x, y):
     res_x = []
     for i in range(l-1):
         r = y[i] * y[i+1]
-        if(r <=0 ): # intersection
+        if(r <=0 and y[i] != y[i+1]): # intersection
             #interpolation
             yd = abs(y[i]) + abs(y[i+1])
             frac = abs(y[i])/yd

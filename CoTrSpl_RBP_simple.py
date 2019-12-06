@@ -17,11 +17,11 @@ import numpy as np
 
 extended_model = False
 RON_gene = False
-sim_series = False
-plot_3d_series = True
+sim_series = True
+plot_3d_series = False
 
 runtime = 60
-init_mol_count = 10000
+init_mol_count = 100000
 
 factor = 2
 
@@ -36,8 +36,8 @@ if RON_gene:
     spl_i_tau = 0.1 * factor
     spl_s_tau = 0.5 * factor
     
-    rbp_pos = 250
-    rbp_radius = 50
+    rbp_pos = 350
+    rbp_radius = 30
     
     
     rbp_br = 0.2 * factor
@@ -45,7 +45,7 @@ if RON_gene:
 #    rbp_br = 20 * factor
 #    rbp_ur = 0.0 * factor
     
-    rbp_hill_c = 0
+    rbp_hill_c = 15
     
     rbp_posistions = np.linspace(0, 650, 201)
     
@@ -63,19 +63,19 @@ else: #experimental parameters
     u1_2_bs_pos = 443
     u2_2_bs_pos = 520
     
-    spl_i_tau = 2
-    spl_s_tau = 5 
+    spl_i_tau = 4e-2
+    spl_s_tau = 1e-1
     
     rbp_pos = 250
     rbp_radius = 40
     
     
-    rbp_br = 1
-    rbp_ur = 0.0002 
+    rbp_br = 1e-1
+    rbp_ur = 1e-2
 #    rbp_br = 20 * factor
 #    rbp_ur = 0.0 * factor
     
-    rbp_hill_c = 15
+    rbp_hill_c = 10
     
     rbp_posistions = np.linspace(0, 650, 201)
     vpol = 60
@@ -201,13 +201,18 @@ if sim_series:
     ax.legend()
     ax2 = ax.twinx()
     inh_curve_u11 = [bs.norm_proximity(rbp_p, u1_1_bs_pos, rbp_radius, rbp_hill_c) for rbp_p in rbp_posistions]
-    ax2.plot(rbp_posistions,inh_curve_u11, label = "Inh. range", linestyle=":", color="red")
+    ax2.plot(rbp_posistions,inh_curve_u11, label = "Inh. range on U11", linestyle=":", color="red")
+    inh_curve_u22 = [bs.norm_proximity(rbp_p, u2_2_bs_pos, rbp_radius, rbp_hill_c) for rbp_p in rbp_posistions]
+    ax2.plot(rbp_posistions,inh_curve_u22, label = "Inh. range on U22", linestyle=":", color="green")
+#    inh_curve_pos350 = [bs.norm_proximity(rbp_p,350 , rbp_radius, rbp_hill_c) for rbp_p in rbp_posistions]
+#    ax2.plot(rbp_posistions,inh_curve_pos350, label = "Inh. range on 350", linestyle=":", color="orange")
     ax2.legend()
 
 if plot_3d_series:
 
     s.set_runtime(1e4)
     vpols = np.linspace(1,400,100)
+    vpols = np.logspace(1,3,100)
     rbp_poss = np.linspace(50, 650, 61)
     X, Y = np.meshgrid(rbp_poss, vpols)
     
@@ -218,15 +223,16 @@ if plot_3d_series:
     
     fig = plt.figure()
     ax = fig.gca(projection='3d')
-    ax.plot_surface(X,Y,Z,  cmap=cm.coolwarm)
+    ax.plot_surface(X,np.log10(Y),Z,  cmap=cm.coolwarm)
     ax.set_xlabel("RBP pos")
     ax.set_ylabel("vpol [nt/s]")
     ax.set_zlabel("PSI")
+#    ax.set_yscale("log")
+#    ax.yaxis._set_scale('log')
     
     step = 10
     indx_x = np.arange(0, len(rbp_poss)-1, step)
     indx_y = np.arange(0, len(vpols)-1, step)
-    
     fig, ax  = plt.subplots()
     im = ax.imshow(Z)
     cbar = ax.figure.colorbar(im, ax=ax)

@@ -13,13 +13,18 @@ import support_th as sth
 
 import numpy as np
 
-sims_count = 10
+sims_count = 100
 
 gene_length = 800 #nt
-init_mol_count = 1000
+init_mol_count = 300
 
 analytical = True
 
+fontsize=10
+plt.rc('xtick', labelsize=fontsize)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=fontsize)
+
+plt.rc("font", size=fontsize)
 
 #select model:
 # 1: unbranched few steps
@@ -34,7 +39,7 @@ analytical = True
 # 7: branched early inh bell few steps
 # 8: branched early inh bell many steps
 
-model_id = 3
+model_id = "test"
 
 vpols = np.logspace(0,3.2,50)
 
@@ -46,14 +51,14 @@ kesc_r = 0
 if model_id == "test":
     l = 8
     m1 = 0
-    m2 = 5
+    m2 = 8
     n = 3
-    k = 1
+    k = 2
     
     ki = 0.5
     ks = 1
     kesc = 0.8
-    kesc_r = 0.3
+    kesc_r = 0
 
 if model_id == "test2":
     l = 80
@@ -94,9 +99,11 @@ if model_id == 3:
     m2 = 3
     n = 2
     ki = 5e-2
-    ks = 1e-3
+#    ki = 1e-1
+#    ki = 5e-1
+    ks = 5e-3
     kesc = 0.5
-    kesc_r = 0.73
+    kesc_r = 0
 
 if model_id == 4:
     l=80
@@ -202,7 +209,7 @@ def psi_analyticaly(vpol, gene_length, l, m1, m2, k, n,ki,ks,kesc, kesc_r):
     
     return pi
 
-psi_inter =l*ki/(l*ki+ l*kesc)
+psi_inter =ki/(ki+ kesc)
 #psi_inter =ki/(ki+kesc)
  
 if(k >= m1):
@@ -291,7 +298,7 @@ s1.add_timeEvent(te2)
 s1.add_timeEvent(te3)
 s1.add_timeEvent(te4)
 
-s1.draw_pn(engine="dot", rates=False)
+#s1.draw_pn(engine="dot", rates=False)
 td_sim = s1
 #s1.show_interface()
 # Plot many realizations
@@ -306,9 +313,12 @@ for i in range(sims_count):
         kelong = l/avg_tr_time
         step_sim.set_param("k_elong", kelong)
         step_sim.simulate()
-        psis_all1[i,j] = step_sim.get_psi_mean()
+        incl = step_sim.get_res_col("Incl")[-1]
+        skip = step_sim.get_res_col("Skip")[-1]
         
-        t_per_step = avg_tr_time /l
+        psis_all1[i,j] = incl/(incl+skip)
+        
+        t_per_step = avg_tr_time / l
         # time delays model
         tau1 = t_per_step * k
         tau2 = t_per_step * m1
@@ -320,12 +330,27 @@ for i in range(sims_count):
         te3.set_time(tau3)
         te4.set_time(tau4)
         td_sim.simulate()
-        psis_all2[i,j] = td_sim.get_psi_mean()
+        incl = td_sim.get_res_col("Incl")[-1]
+        skip = td_sim.get_res_col("Skip")[-1]
+        psis_all2[i,j] = incl/(incl+skip)
+
+#compare noise
+psis_stds = np.std(psis_all2, axis=0)
+counts = np.ones(psis_all2.shape[-1]) * init_mol_count
+psi_stds_exp = sth.tmp_simulate_std_gillespie(counts, np.mean(psis_all2, axis=0))
+
+fig, ax = plt.subplots()
+ax.scatter(psis_stds, psi_stds_exp)
+ax.plot([0,max(psis_stds)], [0,max(psis_stds)])
+ax.set_title("Noise comparison")
+ax.set_ylabel("Simple model")
+ax.set_xlabel("Tested model")
 
 #psis_diff = psis_all1 - psis_all2
         
 labels = ["%.2f" % x for x in vpols]        
-fig, ax = plt.subplots()
+fig, axs = plt.subplots(1,2, figsize=(7,3))
+ax = axs[0]
 out1 = ax.boxplot(psis_all1, labels = labels, sym = "")
 out2 = ax.boxplot(psis_all2,  labels = labels, sym = "")
 plt.xticks(rotation=60)
@@ -343,7 +368,7 @@ for key, val in out2.items():
 leg_els = []
 leg_els.append(ax.axhline(psi_slow, linestyle="--", lw=1.5, color="green", label = "PSI slow"))
 leg_els.append(ax.axhline(psi_fast, linestyle="-.", lw=1.5, color="red", label = "PSI fast"))
-leg_els.append(ax.axhline(psi_inter, linestyle=":", lw=1.5, color="blue", label = "PSI inter"))
+leg_els.append(ax.axhline(psi_inter, linestyle=":", lw=1.5, color="blue", label = "PSI medium"))
 #ax.boxplot(psis_diff, labels = vpols)
         
 #ax.set_xscale("log")
@@ -351,10 +376,18 @@ leg_els.append(ax.axhline(psi_inter, linestyle=":", lw=1.5, color="blue", label 
 #ax.axvline(kesc, linestyle="--", color="red", label="k_elong=kesc")
 red_l = plt.Line2D([],[], linewidth=3, color="red", label="step model")
 green_l = plt.Line2D([],[], linewidth=3, color="green", label = "time delay model")
-ax.legend(handles = [red_l, green_l] + leg_els)
+ax.legend(handles = [red_l, green_l] + leg_els, fontsize=fontsize)
 ax.set_title("l:%d, m1:%d, m2:%d k:%d, n:%d, mc:%d" % (l, m1, m2, k, n, init_mol_count))
 ax.set_xlabel("vpol (nt/s)")
 ax.set_ylabel("PSI")
+ax.tick_params(axis=u'both', which=u'both',length=0)
+plt.setp(ax.get_xticklabels(), visible=False)
+#every_nth =8
+#for num, label in enumerate(ax.xaxis.get_ticklabels()):
+#    if num % every_nth != 0:
+#        label.set_visible(False)
+#        label.set_rotation(140)
+#plt.setp(ax.get_yticklabels(), visible=False)
 
 
 if (analytical):
@@ -362,27 +395,49 @@ if (analytical):
     psis_analyt = [psi_analyticaly(vpol2, gene_length, l, m1, m2, k, n,ki,ks,kesc,kesc_r) for vpol2 in vpols]
     vpols_log = np.log10(vpols)
 #    vpols_log = vpols
-    derv_1 = sth.numerical_derivation(vpols_log, psis_analyt)
-    derv_2 = sth.numerical_derivation(vpols_log, derv_1)
-    zeros = sth.get_zero_points(vpols_log, derv_2)
-    fig, ax = plt.subplots()
-    ax.plot(vpols_log, psis_analyt, lw=2)
+    derv_1_log = sth.numerical_derivation(vpols_log, psis_analyt)
+    derv_2_log = sth.numerical_derivation(vpols_log, derv_1_log)
+    zeros_log = sth.get_zero_points(vpols_log, derv_2_log)
+    zeros_log_tr = 10**zeros_log
+    derv_1 = sth.numerical_derivation(vpols, psis_analyt)
+    derv_2 = sth.numerical_derivation(vpols, derv_1)
+    zeros = sth.get_zero_points(vpols, derv_2)
+#   
+#    fig, ax = plt.subplots()
+    ax = axs[1]
+    ax.plot(vpols, psis_analyt, lw=3)
     ax_twin = ax.twinx()
-    plot_derivations = False
+    plot_derivations = True
     if plot_derivations:
-        ax_twin.plot(vpols_log, derv_1, lw = 1, label = "derivation 1")
-        ax_twin.plot(vpols_log, derv_2, lw = 1, label = "derivation 2")
-#    ax.set_xscale("log")
-#    ax_twin.set_xscale("log")
+        ax_twin.plot(vpols, derv_1, lw = 0.5, label = "derivation 1")
+        ax_twin.plot(vpols, derv_2, lw = 0.5, label = "derivation 2")
+    ax.set_xscale("log")
+    ax_twin.set_xscale("log")
     ax_twin.axhline(0, ls="--", lw=0.7, color="black")
-    ax_twin.legend()
+    ax_twin.legend(fontsize=fontsize)
     kelong = kesc*l
     for z in zeros:
-        ax.axvline(z, label="inflection point")
+        ax_twin.axvline(z, ls="-", lw=0.7, color="green" )
+#        ax_twin.annotate("%.2f" % z, (z,0), xytext=(z-0.1,-0.1),
+#                         arrowprops={"arrowstyle": "->"}, color="green")
+    for z in zeros_log_tr:
+        ax_twin.axvline(z, ls="-", lw=0.7, color="red")
+        
+    green_l = plt.Line2D([],[], linewidth=0.7, linestyle="-", color="green",
+                         label="infl.p. lin(%s)" % (", ".join("%.0f" % z for z in zeros)))
+    red_l = plt.Line2D([],[], linewidth=0.7, linestyle="-", color="red",
+                       label = "infl.p. log(%s)" % (", ".join("%.0f" % z for z in zeros_log_tr)))
+        
     ax.axhline(psi_slow, linestyle="--", lw=1.5, color="green", label = "PSI slow")
     ax.axhline(psi_fast, linestyle="-.", lw=1.5, color="red", label = "PSI fast")
-    ax.axhline(psi_inter, linestyle=":", lw=1.5, color="blue", label = "PSI inter")
+    ax.axhline(psi_inter, linestyle=":", lw=1.5, color="blue", label = "PSI medium")
+#    ax.legend(fontsize=fontsize)
+    ax.set_title("analytic")
+#    ax_twin.legend([red_l, green_l])
+    ax_twin.legend(handles = [red_l, green_l], fontsize=fontsize)
 
+#fig.legend(loc=7)
+    
 #plot parameters course
 vpol = 50
 fig, ax = plt.subplots(figsize=(5,2.5))
@@ -402,5 +457,5 @@ ax.set_title("Parameters")
 
 ax.set_xlabel("time")
 ax.set_ylabel("value")
-ax.legend()
+ax.legend(fontsize=fontsize)
 fig.tight_layout()
