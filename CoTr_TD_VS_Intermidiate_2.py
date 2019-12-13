@@ -18,7 +18,7 @@ sims_count = 100
 gene_length = 800 #nt
 init_mol_count = 300
 
-analytical = True
+analytical = False
 
 fontsize=10
 plt.rc('xtick', labelsize=fontsize)    # fontsize of the tick labels
@@ -39,7 +39,7 @@ plt.rc("font", size=fontsize)
 # 7: branched early inh bell few steps
 # 8: branched early inh bell many steps
 
-model_id = "test"
+model_id = 3
 
 vpols = np.logspace(0,3.2,50)
 
@@ -48,6 +48,12 @@ vpol = 50
 
 kesc_r = 0
 
+class ModelTopology(object):
+    def __init__(self):
+        pass
+    
+#def get_models(model_id="test"):
+    
 if model_id == "test":
     l = 8
     m1 = 0
@@ -170,6 +176,7 @@ if model_id == 8:
     ks = 2e-1
     kesc = 2e-1
     k_elongs = np.logspace(0,3,40)
+    
 
 #TODO
 def psi_analyticaly(vpol, gene_length, l, m1, m2, k, n,ki,ks,kesc, kesc_r):

@@ -18,10 +18,10 @@ import numpy as np
 extended_model = False
 RON_gene = False
 sim_series = True
-plot_3d_series = False
+plot_3d_series = True
 
 runtime = 60
-init_mol_count = 100000
+init_mol_count = 10000
 
 factor = 2
 
@@ -63,15 +63,15 @@ else: #experimental parameters
     u1_2_bs_pos = 443
     u2_2_bs_pos = 520
     
-    spl_i_tau = 4e-2
-    spl_s_tau = 1e-1
+    spl_i_tau = 0.1
+    spl_s_tau = 0.02
     
     rbp_pos = 250
     rbp_radius = 40
     
     
     rbp_br = 1e-1
-    rbp_ur = 1e-2
+    rbp_ur = 1e-3
 #    rbp_br = 20 * factor
 #    rbp_ur = 0.0 * factor
     
@@ -172,7 +172,7 @@ s.compile_system()
 #s.simulate_ODE = True
 #s.simulate()
 #s.plot_course()
-#s.draw_pn(engine="dot", rates=False)
+s.draw_pn(engine="dot", rates=False)
 s.show_interface()
 inh_curve = 'norm_proximity(t*vpol, rbp_pos, rbp_radius, rbp_hill_c)'
 #s.plot_course(products= [inh_curve])
