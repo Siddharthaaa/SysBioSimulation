@@ -17,11 +17,11 @@ import numpy as np
 
 extended_model = True
 RON_gene = True
-sim_series = True
+sim_series = False
 plot_3d_series = True
 
 runtime = 60
-init_mol_count = 100000
+init_mol_count = 50000
 
 factor = 2
 
@@ -40,24 +40,24 @@ if RON_gene:
     
     #exon definition rates
     k1 = 5e-2
-    k2 = 1e-5
+    k2 = 1e-2
     k3 = 1e-1
     
     k1_i = 0
     k2_i = 0
     k3_i = 0
     
-    spl_r = 1
-    ret_r = 0.01
+    spl_r = 0.05
+    ret_r = 0.001
     
     rbp_pos = 400
     rbp_bbr = 0.01 #basal binding rate
     rbp_br = 1 #pol2 associated binding rate
-    rbp_e_up = 10
-    rbp_e_down = 30
-    rbp_h_c = 10
+    rbp_e_up = 20
+    rbp_e_down = 40
+    rbp_h_c = 8
     
-    pol_dist = 20 # nt's after pol pass the binding pos 
+    pol_dist = 20 # max nt's after pol kann apply somth, passing the binding pos 
     
     
 else: #experimental parameters

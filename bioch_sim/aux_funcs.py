@@ -18,6 +18,12 @@ import matplotlib
 from tkinter import Tk 
 import pickle
 
+
+
+class empty(object):
+    def __init__(self):
+        pass
+
 def plot_hist(x,title = "Distribution", bins = 15, ax = None, scale=1, exp_maxi=3, max_range=None ):
     if ax == None:
         fig, ax = plt.subplots(1, figsize=(5*scale,5*scale))

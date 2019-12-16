@@ -38,7 +38,17 @@ class TimeEvent(object):
         for  k, v in self.consts.items():
             s = re.sub("\\b" + k + "\\b", "%s[\"%s\"]" % ("self.consts",k), s)
         self.__expr_str = s
-        
+    def apply_action(self, consts = None):
+        if consts is None:
+            consts = self.consts
+        s = self.action
+        changed_pars = []
+        for  k, v in consts.items():
+            if(re.search("\\b" + k + "\\b\\s*=", s)):
+                changed_pars.append(k)
+            s = re.sub("\\b" + k + "\\b", "%s[\"%s\"]" % ("consts",k), s)
+        exec(s)
+        return changed_pars
     def __get_t(self):
         if(self.__t_str is not None):
 #            print(self.__expr_str)
