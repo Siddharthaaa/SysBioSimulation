@@ -5,9 +5,10 @@ class TimeEvent(object):
     _count = 0    
     def __init__(self, t, a, name = None):
         self._id = TimeEvent._count
+        TimeEvent._count+=1
         if (name is None):
-            name = "TimeEvent" + str(TimeEvent._count)
-            TimeEvent._count+=1
+            name = "TimeEvent" + str(self._id)
+            
         self.name = name
         self.consts = None
         self.set_time(t)

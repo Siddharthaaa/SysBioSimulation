@@ -17,8 +17,8 @@ import numpy as np
 
 extended_model = False
 RON_gene = False
-sim_series = True
-plot_3d_series = True
+sim_series = False
+plot_3d_series = False
 
 runtime = 60
 init_mol_count = 10000

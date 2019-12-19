@@ -16,7 +16,7 @@ import numpy as np
 sims_count = 100
 
 gene_length = 800 #nt
-init_mol_count = 300
+init_mol_count = 100
 
 analytical = False
 
@@ -39,7 +39,7 @@ plt.rc("font", size=fontsize)
 # 7: branched early inh bell few steps
 # 8: branched early inh bell many steps
 
-model_id = 3
+model_id = 1
 
 vpols = np.logspace(0,3.2,50)
 
@@ -86,6 +86,7 @@ if model_id == 1:
     ki = 5e-2
     ks = 5e-1
     kesc = 0
+    
     
 if model_id == 2:
     l = 80
@@ -313,29 +314,46 @@ ax = None
 psis_all1 = np.zeros((int(sims_count), len(vpols)))
 psis_all2 = np.zeros((int(sims_count), len(vpols)))
 
-for i in range(sims_count):
-    for j, vpol in enumerate(vpols):
+psis_det_step = np.zeros( len(vpols))
+psis_det_td = np.zeros( len(vpols))
+
+for j, vpol in enumerate(vpols):
+    avg_tr_time = gene_length/vpol
+    kelong = l/avg_tr_time
+    step_sim.set_param("k_elong", kelong)
+    t_per_step = avg_tr_time / l
+    # time delays model
+    tau1 = t_per_step * k
+    tau2 = t_per_step * m1
+    tau3 = t_per_step * (m1 + m2)
+    tau4 = t_per_step * (l-n)
+    
+    te1.set_time(tau1)
+    te2.set_time(tau2)
+    te3.set_time(tau3)
+    te4.set_time(tau4)
+    
+    step_sim.simulate(ODE=True)
+    td_sim.simulate(ODE=True)
+    
+    incl = step_sim.get_res_col("Incl", method="ODE")[-1]
+    skip = step_sim.get_res_col("Skip", method="ODE")[-1]
+    psis_det_step[j] = incl/(incl+skip)
+    
+    incl = td_sim.get_res_col("Incl", method="ODE")[-1]
+    skip = td_sim.get_res_col("Skip", method="ODE")[-1]
+    psis_det_td[j] = incl/(incl+skip)
+    
+    for i in range(sims_count):
         # step model
-        avg_tr_time = gene_length/vpol
-        kelong = l/avg_tr_time
-        step_sim.set_param("k_elong", kelong)
+        
         step_sim.simulate()
         incl = step_sim.get_res_col("Incl")[-1]
         skip = step_sim.get_res_col("Skip")[-1]
         
         psis_all1[i,j] = incl/(incl+skip)
         
-        t_per_step = avg_tr_time / l
-        # time delays model
-        tau1 = t_per_step * k
-        tau2 = t_per_step * m1
-        tau3 = t_per_step * (m1 + m2)
-        tau4 = t_per_step * (l-n)
-        
-        te1.set_time(tau1)
-        te2.set_time(tau2)
-        te3.set_time(tau3)
-        te4.set_time(tau4)
+       
         td_sim.simulate()
         incl = td_sim.get_res_col("Incl")[-1]
         skip = td_sim.get_res_col("Skip")[-1]
@@ -356,7 +374,7 @@ ax.set_xlabel("Tested model")
 #psis_diff = psis_all1 - psis_all2
         
 labels = ["%.2f" % x for x in vpols]        
-fig, axs = plt.subplots(1,2, figsize=(7,3))
+fig, axs = plt.subplots(2,1, figsize=(3,7))
 ax = axs[0]
 out1 = ax.boxplot(psis_all1, labels = labels, sym = "")
 out2 = ax.boxplot(psis_all2,  labels = labels, sym = "")
@@ -442,7 +460,26 @@ if (analytical):
     ax.set_title("analytic")
 #    ax_twin.legend([red_l, green_l])
     ax_twin.legend(handles = [red_l, green_l], fontsize=fontsize)
-
+else:
+    ax = axs[1]
+    ax.plot(vpols, psis_all2.T, lw=0.1, alpha=1, color="grey", antialiased=True)
+    ax.plot(vpols, psis_det_step, lw=3, color="red", label= "step model" )
+    ax.plot(vpols, psis_det_td, lw=3, color="green", label="time delay model")
+    
+    ax.set_title("deterministic")
+    ax.set_xscale("log")
+    ax.set_xlabel("vpol (nt/s)")
+    ax.set_ylabel("PSI")
+    green_l = plt.Line2D([],[], linewidth=0.7, linestyle="-", color="green",
+                         label="infl.p. lin(%s)" % (", ".join("%.0f" % z for z in zeros)))
+    red_l = plt.Line2D([],[], linewidth=0.7, linestyle="-", color="red",
+                       label = "infl.p. log(%s)" % (", ".join("%.0f" % z for z in zeros_log_tr)))
+        
+    ax.axhline(psi_slow, linestyle="--", lw=1.5, color="green", label = "PSI slow")
+    ax.axhline(psi_fast, linestyle="-.", lw=1.5, color="red", label = "PSI fast")
+    ax.axhline(psi_inter, linestyle=":", lw=1.5, color="blue", label = "PSI medium")
+    ax.legend()
+    
 #fig.legend(loc=7)
     
 #plot parameters course

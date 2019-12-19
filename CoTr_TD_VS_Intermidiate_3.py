@@ -13,12 +13,13 @@ import support_th as sth
 
 import numpy as np
 
-sims_count = 5000
+sims_count = 100
 
 gene_length = 800 #nt
 init_mol_count = 50
 
-analytical = False
+analytical = True
+variance_analysis = True
 
 fontsize=10
 plt.rc('xtick', labelsize=fontsize)    # fontsize of the tick labels
@@ -39,7 +40,7 @@ plt.rc("font", size=fontsize)
 # 7: branched early inh bell few steps
 # 8: branched early inh bell many steps
 
-model_id = "test"
+model_id = 1
 
 vpols = np.logspace(0,3,100)
 
@@ -318,54 +319,54 @@ ax = None
 
 #fig, ax = plt.subplots()
 
-
-models_res = {}
-for model in [1,3,5,7,"test"]:
-    psis_all1 = np.zeros((int(sims_count), len(vpols)))
-    psis_all2 = np.zeros((int(sims_count), len(vpols)))    
+if (variance_analysis):
+    models_res = {}
+    for model in [1,3,5,7,"test"]:
+        psis_all1 = np.zeros((int(sims_count), len(vpols)))
+        psis_all2 = np.zeros((int(sims_count), len(vpols)))    
+        
+        for j, vpol in enumerate(vpols):
+            step_sim, td_sim = get_models(model, vpol = vpol)
+        
+            for i in range(sims_count):
+                # step model
+                avg_tr_time = gene_length/vpol
+    #            kelong = l/avg_tr_time
+    #            step_sim.set_param("k_elong", kelong)
+                step_sim.simulate()
+                incl = step_sim.get_res_col("Incl")[-1]
+                skip = step_sim.get_res_col("Skip")[-1]
+                
+                psis_all1[i,j] = incl/(incl+skip)
+                
+    #            t_per_step = avg_tr_time / l
+    #            # time delays model
+    #            tau1 = t_per_step * k
+    #            tau2 = t_per_step * m1
+    #            tau3 = t_per_step * (m1 + m2)
+    #            tau4 = t_per_step * (l-n)
+    #            
+    #            te1.set_time(tau1)
+    #            te2.set_time(tau2)
+    #            te3.set_time(tau3)
+    #            te4.set_time(tau4)
+                td_sim.simulate()
+                incl = td_sim.get_res_col("Incl")[-1]
+                skip = td_sim.get_res_col("Skip")[-1]
+                psis_all2[i,j] = incl/(incl+skip)
+        
+        psis_stds = np.std(psis_all1, axis=0)
+        psis_means = np.mean(psis_all1, axis=0)
+        models_res[model] = [psis_means, psis_stds]
+        
+    #    ax.scatter(psis_means, psis_stds, marker="o", alpha=0.5, label="model: %s" % str(model))
     
-    for j, vpol in enumerate(vpols):
-        step_sim, td_sim = get_models(model, vpol = vpol)
-    
-        for i in range(sims_count):
-            # step model
-            avg_tr_time = gene_length/vpol
-#            kelong = l/avg_tr_time
-#            step_sim.set_param("k_elong", kelong)
-            step_sim.simulate()
-            incl = step_sim.get_res_col("Incl")[-1]
-            skip = step_sim.get_res_col("Skip")[-1]
-            
-            psis_all1[i,j] = incl/(incl+skip)
-            
-#            t_per_step = avg_tr_time / l
-#            # time delays model
-#            tau1 = t_per_step * k
-#            tau2 = t_per_step * m1
-#            tau3 = t_per_step * (m1 + m2)
-#            tau4 = t_per_step * (l-n)
-#            
-#            te1.set_time(tau1)
-#            te2.set_time(tau2)
-#            te3.set_time(tau3)
-#            te4.set_time(tau4)
-            td_sim.simulate()
-            incl = td_sim.get_res_col("Incl")[-1]
-            skip = td_sim.get_res_col("Skip")[-1]
-            psis_all2[i,j] = incl/(incl+skip)
-    
-    psis_stds = np.std(psis_all1, axis=0)
-    psis_means = np.mean(psis_all1, axis=0)
-    models_res[model] = [psis_means, psis_stds]
-    
-#    ax.scatter(psis_means, psis_stds, marker="o", alpha=0.5, label="model: %s" % str(model))
-
-fig, ax = plt.subplots()
-for m, v in models_res.items():
-    ax.scatter(v[0], v[1], alpha=0.6, label="model: %s" % str(m))
-ax.legend()
-ax.set_ylabel("std(PSI)")
-ax.set_xlabel("mean(PSI)")
-ax.set_title("Noise (mc:%d, sim_count: %d)" % (init_mol_count, sims_count ))
-#plot noises
+    fig, ax = plt.subplots()
+    for m, v in models_res.items():
+        ax.scatter(v[0], v[1], alpha=0.6, label="model: %s" % str(m))
+    ax.legend()
+    ax.set_ylabel("std(PSI)")
+    ax.set_xlabel("mean(PSI)")
+    ax.set_title("Noise (mc:%d, sim_count: %d)" % (init_mol_count, sims_count ))
+    #plot noises
 

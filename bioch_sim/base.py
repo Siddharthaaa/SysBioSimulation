@@ -86,7 +86,7 @@ class SimParam(SimPlotting, object):
         params["id"] = id(self)
         return params
     def param_str(self, sep=", "):
-        s = sep.join([k + "=" + "%e" % v for k,v in self.params.items()])
+        s = sep.join([k + "=" + "%s" % v for k,v in self.params.items()])
         return s
     def set_runtime(self, t):
         self.runtime=t
@@ -118,7 +118,7 @@ class SimParam(SimPlotting, object):
 #        self._time_events = sorted(self._time_events)
     def delete_timeEvents(self):
         self._time_events = []
-    def get_rates(self, state=None):
+    def get_rates(self, state=None, check_pre=True):
         """ state must contain time as first element
         """
         if state is None:
@@ -126,7 +126,7 @@ class SimParam(SimPlotting, object):
         self._update_pre(state, self._constants, self._curr_pre)
         return self._rates_function(state, self._constants
                                     , np.zeros(len(self._reactions)),
-                                    self._curr_pre)
+                                    self._curr_pre, check_pre)
     def get_reacts(self, state = None):
         #returns reaction matrix
         if state is None:
@@ -185,7 +185,7 @@ class SimParam(SimPlotting, object):
         root.mainloop()
         
     
-    def compile_system(self, dynamic = True, add_ns={}):
+    def compile_system(self, dynamic = True, add_ns={}, check_pre=True):
         add_ns = add_ns.copy()
         #convert function to jitted funcitons
         for k, v in add_ns.items():
@@ -266,7 +266,7 @@ class SimParam(SimPlotting, object):
         func_str= "@nb.njit\n"
 #        func_str= ""
         
-        func_str+= "def _r_f_(st, pars, _r_s, _pre):\n"
+        func_str+= "def _r_f_(st, pars, _r_s, _pre, check_pre=True):\n"
 #        func_str+= "\t_r_s=np.zeros(%d)\n" % len(self._r_s)
         func_str+= "\tt=st[0]\n"
         for i, (func, tr) in enumerate(zip(self._rate_funcs, self._transitions.values())):
@@ -277,8 +277,8 @@ class SimParam(SimPlotting, object):
 #                    v_to_chek.append(str(v) + " <= st[%d]" % (j+1))
                     v_to_chek.append("_pre[%d,%d] " % (i,j) + " <= %s" % list(self.init_state)[j])
             
-            if len(v_to_chek) > 0:
-                func = "(" + func + ") if (" + ") and (".join(v_to_chek) + ") else 0" + "\n"
+            if len(v_to_chek) > 0  and check_pre:
+                func = "(" + func + ") if not check_pre or (" + ") and (".join(v_to_chek) + ") else 0" + "\n"
 #                func_str += "\t_r_s[%d] = (" %i + func + ") if (" + ") and (".join(v_to_chek) + ") else 0" + "\n"
 #            self._rate_funcs_extended.append(func)
             tr["rate_ex"] = func
@@ -325,7 +325,9 @@ class SimParam(SimPlotting, object):
             if(dynamic):
                 s = re.sub("\\b" + name + "\\b", "%s[%d]" % (par_name,i), s)
             else:
-                s = re.sub("\\b" + name + "\\b", "%e" % self.params[name], s)
+#                print(self.params[name])
+                if(type(self.params[name]) is not str):
+                    s = re.sub("\\b" + name + "\\b", "%e" % self.params[name], s)
         for i, name in enumerate(self.init_state.keys()):
             s = re.sub("\\b" + name + "\\b", "%s[%d]" % (place_name,i+1), s)
         return s
@@ -354,7 +356,14 @@ class SimParam(SimPlotting, object):
         self._update_post(st, pars, post)
         return post
     
-    def simulate(self, tr_count=1, ODE = False, ret_raw=False, max_steps = 1e9, verbose = True):
+    def _evaluate_pars(self):
+        params = self.params.copy()
+        for k, v in params.items():
+            if(type(v) is str):
+                s = self._sub_vars(v, par_name = "params", dynamic=False)
+                params[k] = eval(s)
+        return params
+    def simulate(self, tr_count=1, stoch=True, ODE = False, ret_raw=False, max_steps = 1e9, verbose = True):
         if not self._is_compiled:
             self.compile_system(dynamic=True)
         cpu_time = time.time()
@@ -364,71 +373,72 @@ class SimParam(SimPlotting, object):
         if(verbose and False):
             print("simulate " + self.param_str())
         results={}
-        params = self.get_all_params()
         tt = self.raster
         pre = self.update_pre()
         post = self.update_post()
 #        print("AAAA:\n", globals())
-        self._constants = np.array(list(self.params.values()))
+#        self._constants = np.array(list(self._evaluate_pars().values()))
         dim = (len(tt),) + self._state.shape
         _last_results = []
         t_events = sorted(self._time_events.copy())
         t_events.append(None)
         
-        for i in range(tr_count):
-            t = time.time()
-            self._constants = np.array(list(self.params.values()))
-            state = np.copy(self._state)
-            STATES = np.zeros(dim)
-            steps = 0
-            t_low = 0.
-            for k, te in enumerate(t_events):
-#                print("Event: ", te)
-                if t_low >= tt[-1]:
-                    break
-                if te is None:
-                    t_high = tt[-1]
-                else:
-                    t_high = te.t
-                indx = np.where((tt>=t_low) * (tt <=t_high))[0]
-                if(len(indx)>0):
-                    il = indx[0]
-                    ih = indx[-1]+1
-                else:
-                    il = 0
-                    ih = il
-                steps += compute_stochastic_evolution(state,
-                                                      t_high,
-                                                      self._constants,
-                                                      STATES[il:ih],
-                                                      tt[il:ih],
-                                                      self._rates_function,
-                                                      self._update_pre,
-                                                      self._update_post,
-                                                      pre, post,
-                                                      nb.int64(max_steps))
-                if te is not None:
-                    state[0] = te.t
-                    print(steps)
-                    print("EVENT ",te._id)
-                    self._time_events_f(te._id, state, self._constants)
-                t_low = t_high
-            _last_results.append(STATES)
-            t = time.time() - t
-            if verbose:
-                print("Steps: ", steps)
-                print("runtime: ", t)
-        self._last_results = np.array(_last_results)
-#        if ret_raw:
-#            results["stochastic"] = sim_st
-#        sim_st_raster = rasterize(sim_st, tt)
-        results["stoch_rastr"] = STATES
+        if(stoch):
+            for i in range(tr_count):
+                t = time.time()
+                self._constants = np.array(list(self._evaluate_pars().values()))
+                state = np.copy(self._state)
+                STATES = np.zeros(dim)
+                steps = 0
+                t_low = 0.
+                for k, te in enumerate(t_events):
+    #                print("Event: ", te)
+                    if t_low >= tt[-1]:
+                        break
+                    if te is None:
+                        t_high = tt[-1]
+                    else:
+                        t_high = te.t
+                    indx = np.where((tt>=t_low) * (tt <=t_high))[0]
+                    if(len(indx)>0):
+                        il = indx[0]
+                        ih = indx[-1]+1
+                    else:
+                        il = 0
+                        ih = il
+                    steps += compute_stochastic_evolution(state,
+                                                          t_high,
+                                                          self._constants,
+                                                          STATES[il:ih],
+                                                          tt[il:ih],
+                                                          self._rates_function,
+                                                          self._update_pre,
+                                                          self._update_post,
+                                                          pre, post,
+                                                          nb.int64(max_steps))
+                    if te is not None:
+                        state[0] = te.t
+    #                    print("EVENT ",te._id)
+    #                    print(te)
+    #                    print(steps)
+                        self._time_events_f(te._id, state, self._constants)
+                    t_low = t_high
+                _last_results.append(STATES)
+                t = time.time() - t
+                if verbose:
+                    print("Steps: ", steps)
+                    print("runtime: ", t)
+            self._last_results = np.array(_last_results)
+    #        if ret_raw:
+    #            results["stochastic"] = sim_st
+    #        sim_st_raster = rasterize(sim_st, tt)
+            results["stoch_rastr"] = STATES
         
         #determinisitic simulation
         if ODE or self.simulate_ODE:
             sol_deterministic = self._simulate_ODE()
             #add time column
-            print(sol_deterministic.shape)
+#            print(sol_deterministic.shape)
             results["ODE"] = np.hstack((tt.reshape(len(tt),1),sol_deterministic))
         self.results = results
         cpu_time = time.time() - cpu_time
@@ -437,55 +447,50 @@ class SimParam(SimPlotting, object):
         return results
     
     def _simulate_ODE(self, start_t=0.):
-        t_events = self._time_events.copy()
+        t_events = sorted(self._time_events.copy())
         t_events.append(None)
         t_low = start_t
         raster = self.raster
-        self._constants = np.array(list(self.params.values()))
+        self._constants = np.array(list(self._evaluate_pars().values()))
         results = []
         y_0 = np.array(list(self.init_state.values()), dtype="float64")
-        ih_old = -1
+
         for k, te in enumerate(t_events):
             if t_low >= raster[-1]:
                 break
             if te is None:
-                t_high = raster[-1]
+                t_high = raster[-1]+1
             else:
                 t_high = te.t
-            indx = np.where((raster>=t_low) * (raster <=t_high))[0]
+            indx = np.where((raster>=t_low) * (raster < t_high))[0]
             if(len(indx)>0):
                 il = indx[0]
-                ih = indx[-1]
+                ih = indx[-1]+1
             else:
                 il = 0
                 ih = il
-            tt = raster[il:ih+1]
+#            print(te)
+#            print("il", il, "ih", ih)
+#            print("t_low", t_low, "t_high", t_high)
+            tt = raster[il:ih]
             tt = np.insert(tt, 0, t_low)
             tt = np.append(tt, t_high)
-            print("Rasterlen: ", len(tt))
+#            print("Rasterlen: ", len(tt))
+#            print(tt)
             res = odeint(get_ODE_delta,y_0,tt,args = (self,))
-            print("Res Shape: ", res.shape)
+#            print("Res Shape: ", res.shape)
             y_0 = np.insert(res[-1], 0, t_high)
             if te is not None:
                 self._time_events_f(te._id, y_0, self._constants)
             y_0 = np.delete(y_0, 0)
             res = np.delete(res, [0,len(res)-1],0)
-            if(ih_old == il):
-                res = np.delete(res, 0,0)
-            ih_old = ih
+#            
             if (len(res) > 0):
 #                print("Append.... ", res.shape)
                 results.append(res)
             t_low = t_high
         
-#        res = results[0]
-#        #clean similar connections
-#        for r in results[1:]:
-#            while(len(r) > 0 and (res[-1][0] == r[0][0])):
-#                r = np.delete(r,0,0)
-#                print("deleteing....")
-#            if len(r)>0:
-#                res = np.concatenate([res,r])
+
         results = np.concatenate(list(results))
         print("Before Reshape: ", results.shape)
         #remove/flatten first dimension
@@ -601,7 +606,7 @@ def get_ODE_delta(x,t,sim):
     x_arr[0] = t
     #print(t)
     reacts = sim.get_reacts()
-    rates = sim.get_rates(x_arr)
+    rates = sim.get_rates(x_arr, False)
 #    print(rates)
 #    print(reacts, rates)
     dx = reacts.transpose().dot(rates)

@@ -5,6 +5,7 @@ from tkinter.colorchooser import askcolor
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.colors as colors
 import pylab as plt
+import re
 
 class SimInterface(tk.Frame):
     def __init__(self, sim):
@@ -229,7 +230,11 @@ class SimInterface(tk.Frame):
     def fetch_pars(self):
         sim = self.sim
         for k, e in self.par_entries.items():
-            v = eval(e.get())
+            s = e.get()
+            if(re.search("[a-zA-Z]", s)):
+                v = s
+            else:
+                v = eval(e.get())
             sim.set_param(k,v)
         
             

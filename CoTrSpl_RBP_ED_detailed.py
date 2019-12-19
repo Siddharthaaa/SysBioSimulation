@@ -18,17 +18,22 @@ import numpy as np
 extended_model = True
 RON_gene = True
 sim_series = False
-plot_3d_series = True
+plot_3d_series_stoch = False
+plot_3d_series_det = True
+plot_3d_series_rbp_br_titr = True
 
+
+
+spl_inh= False
 runtime = 60
-init_mol_count = 50000
+init_mol_count = 1000
 
 factor = 2
 
 rbp_posistions = np.linspace(0, 700, 201)
 
 if RON_gene:
-    runtime = 50
+    runtime = 20
     gene_len = 700
     vpol = 50
     
@@ -39,25 +44,33 @@ if RON_gene:
     u1_3_pos = 690
     
     #exon definition rates
-    k1 = 5e-2
-    k2 = 1e-2
-    k3 = 1e-1
+    k1 = 1e-1 * factor
+    k2 = 1e-2 * factor
+    k3 = 1e-1 * factor
     
     k1_i = 0
     k2_i = 0
     k3_i = 0
     
-    spl_r = 0.05
+    k1_inh = "k1_t * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k2_inh = "k2_t * (1-rbp_inh*asym_porximity(rbp_pos, u2_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_porximity(rbp_pos, u1_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k3_inh = "k3_t * (1-rbp_inh*asym_porximity(rbp_pos, u1_3_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    
+    
+    spl_r = 0.1
     ret_r = 0.001
     
-    rbp_pos = 400
-    rbp_bbr = 0.01 #basal binding rate
-    rbp_br = 1 #pol2 associated binding rate
+    rbp_pos = 350
+    rbp_inh = 0.99
+    rbp_bbr = 1e-9 #basal binding rate
+    rbp_br = 0.1 * factor #pol2 associated binding rate
     rbp_e_up = 20
     rbp_e_down = 40
-    rbp_h_c = 8
+    rbp_h_c = 10
     
-    pol_dist = 20 # max nt's after pol kann apply somth, passing the binding pos 
+    pol_dist = 10 # max nt's after pol can bring somth. to nascRNA
     
     
 else: #experimental parameters
@@ -74,6 +87,7 @@ else: #experimental parameters
     
     rbp_pos = 250
     rbp_radius = 40
+    
     
     rbp_br = 1e-1
     rbp_ur = 1e-3
@@ -100,6 +114,15 @@ params = {"vpol": vpol,
         "k2_t": k2,
         "k3_t": k3,
         
+        "k1_inh": 0,
+        "k2_inh": 0,
+        "k3_inh": 0,
+        
+        "k1_inh_t": k1_inh,
+        "k2_inh_t": k2_inh,
+        "k3_inh_t": k3_inh,
+        
+        
         "rbp_pos": rbp_pos,
         "rbp_bbr": rbp_bbr,
         "rbp_br": 0,
@@ -107,8 +130,10 @@ params = {"vpol": vpol,
         "rbp_e_up": rbp_e_up,
         "rbp_e_down": rbp_e_down,
         "rbp_h_c": rbp_h_c,
+        "rbp_inh": rbp_inh,
         "pol_dist": pol_dist,
-        "spl": spl_r,
+        "spl_i": spl_r,
+        "spl_s": spl_r*0.5,
         "ret_r": 0,
         "ret_r_t": ret_r
         
@@ -117,69 +142,65 @@ if(extended_model):
     s = bs.SimParam("CoTrSpl_RBP_extended", runtime, 10001, params = params,
                     init_state = {"P000": init_mol_count})
     
-    for ext in ["", "_rbp"]:
-        s.add_reaction("P000"+ext+"*k1", {"P100"+ext+"":1, "P000"+ext+"":-1}, "E1 def")
-        s.add_reaction("P000"+ext+"*k2", {"P010"+ext+"":1, "P000"+ext+"":-1}, "E2 def")
-        s.add_reaction("P000"+ext+"*k3", {"P001"+ext+"":1, "P000"+ext+"":-1}, "E3 def")
-        s.add_reaction("P100"+ext+"*k2", {"P110"+ext+"":1, "P100"+ext+"":-1}, "E2 def")
-        s.add_reaction("P100"+ext+"*k3", {"P101"+ext+"":1, "P100"+ext+"":-1}, "E3 def")
-        s.add_reaction("P010"+ext+"*k1", {"P110"+ext+"":1, "P010"+ext+"":-1}, "E1 def")
-        s.add_reaction("P010"+ext+"*k3", {"P011"+ext+"":1, "P010"+ext+"":-1}, "E3 def")
-        s.add_reaction("P001"+ext+"*k1", {"P101"+ext+"":1, "P001"+ext+"":-1}, "E1 def")
-        s.add_reaction("P001"+ext+"*k2", {"P011"+ext+"":1, "P001"+ext+"":-1}, "E2 def")
+    for ext in ["", "_inh"]:
+        s.add_reaction("P000"+ext+"*k1"+ext, {"P100"+ext+"":1, "P000"+ext+"":-1}, "E1 def")
+        s.add_reaction("P000"+ext+"*k2"+ext, {"P010"+ext+"":1, "P000"+ext+"":-1}, "E2 def")
+        s.add_reaction("P000"+ext+"*k3"+ext, {"P001"+ext+"":1, "P000"+ext+"":-1}, "E3 def")
+        s.add_reaction("P100"+ext+"*k2"+ext, {"P110"+ext+"":1, "P100"+ext+"":-1}, "E2 def")
+        s.add_reaction("P100"+ext+"*k3"+ext, {"P101"+ext+"":1, "P100"+ext+"":-1}, "E3 def")
+        s.add_reaction("P010"+ext+"*k1"+ext, {"P110"+ext+"":1, "P010"+ext+"":-1}, "E1 def")
+        s.add_reaction("P010"+ext+"*k3"+ext, {"P011"+ext+"":1, "P010"+ext+"":-1}, "E3 def")
+        s.add_reaction("P001"+ext+"*k1"+ext, {"P101"+ext+"":1, "P001"+ext+"":-1}, "E1 def")
+        s.add_reaction("P001"+ext+"*k2"+ext, {"P011"+ext+"":1, "P001"+ext+"":-1}, "E2 def")
         
-        s.add_reaction("P110"+ext+"*k3", {"P111"+ext+"":1, "P110"+ext+"":-1}, "E3 def")
-        s.add_reaction("P101"+ext+"*k2", {"P111"+ext+"":1, "P101"+ext+"":-1}, "E2 def")
-        s.add_reaction("P011"+ext+"*k1", {"P111"+ext+"":1, "P011"+ext+"":-1}, "E1 def")
+        s.add_reaction("P110"+ext+"*k3"+ext, {"P111"+ext+"":1, "P110"+ext+"":-1}, "E3 def")
+        s.add_reaction("P101"+ext+"*k2"+ext, {"P111"+ext+"":1, "P101"+ext+"":-1}, "E2 def")
+        s.add_reaction("P011"+ext+"*k1"+ext, {"P111"+ext+"":1, "P011"+ext+"":-1}, "E1 def")
     
     for spec in ["P000", "P001", "P010", "P100", "P011", "P101", "P110", "P111"]:
-        spec_i = spec + "_rbp"
+        spec_i = spec + "_inh"
         s.add_reaction(spec + "*rbp_br", {spec:-1, spec_i:1}, "inh.")
         s.add_reaction(spec + "*ret_r", {spec:-1, "ret":1}, "retention")
         s.add_reaction(spec_i + "*ret_r", {spec_i:-1, "ret":1}, "retention")
     
-    s.add_reaction("P111*spl", {"P111":-1, "Incl": 1}, "inclusion")
-    s.add_reaction("P101*spl", {"P101":-1, "Skip": 1}, "skipping")
+    s.add_reaction("P111*spl_i", {"P111":-1, "Incl": 1}, "inclusion")
+    s.add_reaction("P101*spl_s", {"P101":-1, "Skip": 1}, "skipping")
+    s.add_reaction("P111*spl_s", {"P111":-1, "Skip": 1}, "skipping")
     
-    s.add_reaction("P111_rbp*spl * (1-asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                   * (1-asym_porximity(rbp_pos, u2_1_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
-                   * (1-asym_porximity(rbp_pos, u1_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
-                   * (1-asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
-                   {"P111_rbp":-1, "Incl":1, "TEST_INCL":1}, "inclusion")
-    
-    s.add_reaction("P101_rbp*spl * (1-asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                   * (1-asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
-                   {"P101_rbp":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
-    
+    if spl_inh:
+        s.add_reaction("P111_inh*spl_i * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                       * (1-rbp_inh*asym_porximity(rbp_pos, u2_1_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
+                       * (1-rbp_inh*asym_porximity(rbp_pos, u1_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
+                       * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+                       {"P111_inh":-1, "Incl":1, "TEST_INCL":1}, "inclusion")
+        
+        s.add_reaction("P101_inh*spl_s * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                       * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+                       {"P101_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
+        s.add_reaction("P111_inh*spl_s * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                       * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+                       {"P111_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
+    else:
+        s.add_reaction("P111_inh*spl_i",
+                       {"P111_inh":-1, "Incl":1, "TEST_INCL":1}, "inclusion")
+        
+        s.add_reaction("P101_inh*spl_s",
+                       {"P101_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
+        s.add_reaction("P111_inh*spl_s",
+                       {"P111_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
+        
     
     
 else: #TODO
-    s = bs.SimParam("CoTrSpl_RBP_simple", runtime, 10001, params = params,
-                    init_state = {"mRNA": init_mol_count})
-    
-    s.add_reaction("mRNA*rbp_br", dict(mRNA=-1, mRNAinh=1), "RBP to mRNA")
-    s.add_reaction("mRNAinh * rbp_ur", dict(mRNA=1, mRNAinh=-1), "RBP from mRNA")
-    s.add_reaction("mRNA*spl_i1", dict(mRNA=-1, Incl=1), "1. Intr splicing")
-    s.add_reaction("mRNA*spl_i2", dict(mRNA=-1, Incl=1), "2. Intr splicing")
-    s.add_reaction("mRNA*spl_s", dict(mRNA=-1, Skip=1), "Skipping")
-    
-    s.add_reaction("mRNAinh*spl_i1 * (1-norm_proximity(rbp_pos, u1_1_bs_pos, rbp_radius, rbp_hill_c)) \
-     * (1-norm_proximity(rbp_pos, u2_1_bs_pos, rbp_radius, rbp_hill_c))",
-        dict(mRNAinh=-1, Incl=1), "1. Intr splicing")
-    s.add_reaction("mRNAinh*spl_i2 * (1-norm_proximity(rbp_pos, u1_2_bs_pos, rbp_radius, rbp_hill_c)) \
-     * (1-norm_proximity(rbp_pos, u2_2_bs_pos, rbp_radius, rbp_hill_c))",
-        dict(mRNAinh=-1, Incl=1), "2. Intr splicing")
-    s.add_reaction("mRNAinh*spl_s * (1-norm_proximity(rbp_pos, u1_1_bs_pos, rbp_radius, rbp_hill_c)) \
-     * (1-norm_proximity(rbp_pos, u2_2_bs_pos, rbp_radius, rbp_hill_c))",
-        dict(mRNAinh=-1, Skip=1), "Skipping")
+    pass
 
-te1 = bs.TimeEvent("u1_1_pos/vpol", "k1=k1_t")
-te2 = bs.TimeEvent("u1_2_pos/vpol", "k2=k2_t")
-te3 = bs.TimeEvent("u1_3_pos/vpol", "k3=k3_t")
-te4 = bs.TimeEvent("rbp_pos/vpol", "rbp_br=rbp_br_t")
-te5 = bs.TimeEvent("(rbp_pos+pol_dist)/vpol", "rbp_br=rbp_bbr")
-te6 = bs.TimeEvent("gene_len/vpol", "ret_r = ret_r_t")
-
+te1 = bs.TimeEvent("u1_1_pos/vpol", "k1=k1_t; k1_inh=k1_inh_t", name="Ex1 avail")
+te2 = bs.TimeEvent("u1_2_pos/vpol", "k2=k2_t; k2_inh=k2_inh_t", name="Ex2 avail")
+te3 = bs.TimeEvent("u1_3_pos/vpol", "k3=k3_t; k3_inh=k3_inh_t", name="Ex3 avail")
+te4 = bs.TimeEvent("rbp_pos/vpol", "rbp_br=rbp_br_t", name="RBP b. start")
+te5 = bs.TimeEvent("(rbp_pos+pol_dist)/vpol", "rbp_br=rbp_bbr", name="RBP b. end")
+te6 = bs.TimeEvent("gene_len/vpol", "ret_r = ret_r_t", name="ret possible")
+#
 s.add_timeEvent(te1)
 s.add_timeEvent(te2)
 s.add_timeEvent(te3)
@@ -196,6 +217,9 @@ s.show_interface()
 inh_curve = 'norm_proximity(t*vpol, rbp_pos, rbp_radius, rbp_hill_c)'
 #s.plot_course(products= [inh_curve])
 
+s.plot_parameters(parnames=["k1","k2","k3","k1_inh","k2_inh","k3_inh", "ret_r"],
+                  parnames2=["rbp_br"])
+
 if sim_series:
     s.set_runtime(1e4)
     psis = []
@@ -211,7 +235,7 @@ if sim_series:
     
     fig, ax = plt.subplots()
     ax.plot(rbp_posistions, psis, lw=2, label = "PSI")
-    ax.plot(rbp_posistions, rets, lw=1, label="ret")
+    ax.plot(rbp_posistions, rets, lw=1, label="ret %")
     ax.set_xlabel("RBP pos")
     ax.set_ylabel("PSI")
     ax.set_title("u11: %d; u21: %d; u12: %d; u22: %d; Radius:(%d, %d)" % 
@@ -230,13 +254,13 @@ if sim_series:
 #    ax2.plot(rbp_posistions,inh_curve_pos350, label = "Inh. range on 350", linestyle=":", color="orange")
     ax2.legend()
 
-if plot_3d_series:
+if plot_3d_series_stoch:
 
     s.set_runtime(1e4)
     vpols = np.linspace(1,400,100)
-    vpols = np.logspace(1,3,100)
+    vpols = np.logspace(0,3,100)
     rbp_poss = np.linspace(50, 650, 61)
-    X, Y = np.meshgrid(rbp_poss, vpols)
+    X, Y = np.meshgrid(rbp_poss, np.log10(vpols))
     
     res = s.plot_par_var_2d(pars=dict(vpol=vpols, rbp_pos=rbp_poss),
                             func=s.get_psi_mean, ignore_fraction=0.9)
@@ -245,9 +269,9 @@ if plot_3d_series:
     
     fig = plt.figure()
     ax = fig.gca(projection='3d')
-    ax.plot_surface(X,np.log10(Y),Z,  cmap=cm.coolwarm)
+    ax.plot_surface(X,Y,Z,  cmap=cm.coolwarm)
     ax.set_xlabel("RBP pos")
-    ax.set_ylabel("vpol [nt/s]")
+    ax.set_ylabel("log10 (vpol [nt/s])")    
     ax.set_zlabel("PSI")
 #    ax.set_yscale("log")
 #    ax.yaxis._set_scale('log')
@@ -259,6 +283,111 @@ if plot_3d_series:
     im = ax.imshow(Z)
     cbar = ax.figure.colorbar(im, ax=ax)
     cbar.ax.set_ylabel("PSI", rotation=-90, va="bottom")
+    ax.set_xticks(indx_x)
+    ax.set_yticks(indx_y)
+    # ... and label them with the respective list entries.
+    col_labels = rbp_poss[indx_x]
+    row_labels = vpols[indx_y]
+    ax.set_xticklabels(col_labels, fontsize = 10, rotation=60)
+    ax.set_yticklabels(row_labels, fontsize = 10)
+   
+
+if plot_3d_series_det:
+
+    s.set_runtime(1e5)
+    s.set_raster(101)
+    vpols = np.linspace(1,400,100)
+    vpols = np.logspace(0,3,50)
+    rbp_poss = np.linspace(425, 435, 31)
+    rbp_poss = np.linspace(100, 600, 101)
+    X, Y = np.meshgrid(rbp_poss, np.log10(vpols))
+    
+    Z = np.zeros((len(vpols), len(rbp_poss)))
+    rets = np.array(Z)
+    
+    for i, vpol in enumerate(vpols):
+        s.set_param("vpol", vpol)
+        for j, rbp_p in enumerate(rbp_poss):
+            s.set_param("rbp_pos", rbp_p)
+            res = s.simulate(stoch=False, ODE=True)
+            incl = s.get_res_col("Incl", method="ODE")[-1]
+            skip = s.get_res_col("Skip", method="ODE")[-1]
+            ret = s.get_res_col("ret", method="ODE")[-1]
+            psi = incl/(incl+skip)
+            ret_perc = ret/init_mol_count
+            Z[i,j] = psi
+            rets[i,j] = ret_perc
+            
+            
+    
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    ax.plot_surface(X,Y,Z,  cmap=cm.coolwarm)
+    ax.set_xlabel("RBP pos")
+    ax.set_ylabel("log10 (vpol [nt/s])")    
+    ax.set_zlabel("PSI")
+#    ax.set_yscale("log")
+#    ax.yaxis._set_scale('log')
+    
+    step = 10
+    indx_x = np.arange(0, len(rbp_poss)-1, step)
+    indx_y = np.arange(0, len(vpols)-1, step)
+    fig, ax  = plt.subplots()
+    im = ax.imshow(rets)
+    cbar = ax.figure.colorbar(im, ax=ax)
+    cbar.ax.set_ylabel("ret %", rotation=-90, va="bottom")
+    ax.set_xticks(indx_x)
+    ax.set_yticks(indx_y)
+    # ... and label them with the respective list entries.
+    col_labels = rbp_poss[indx_x]
+    row_labels = vpols[indx_y]
+    ax.set_xticklabels(col_labels, fontsize = 10, rotation=60)
+    ax.set_yticklabels(row_labels, fontsize = 10)
+   
+
+if plot_3d_series_rbp_br_titr:
+
+    s.set_runtime(1e4)
+    s.set_raster(101)
+    s.set_param("rbp_pos", 320)
+    vpols = np.linspace(1,400,100)
+    vpols = np.logspace(0,3,50)
+    rbp_poss = np.linspace(0.01, 0.5, 100)
+    X, Y = np.meshgrid(rbp_poss, np.log10(vpols))
+    
+    Z = np.zeros((len(vpols), len(rbp_poss)))
+    rets = np.array(Z)
+    
+    for i, vpol in enumerate(vpols):
+        s.set_param("vpol", vpol)
+        for j, rbp_p in enumerate(rbp_poss):
+            s.set_param("rbp_br_t", rbp_p)
+            res = s.simulate(stoch=False, ODE=True)
+            incl = s.get_res_col("Incl", method="ODE")[-1]
+            skip = s.get_res_col("Skip", method="ODE")[-1]
+            ret = s.get_res_col("ret", method="ODE")[-1]
+            psi = incl/(incl+skip)
+            ret_perc = ret/init_mol_count
+            Z[i,j] = psi
+            rets[i,j] = ret_perc
+            
+    
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    ax.plot_surface(X,Y,Z,  cmap=cm.coolwarm)
+    ax.set_xlabel("RBP binding rate")
+    ax.set_ylabel("log10 (vpol [nt/s])")    
+    ax.set_zlabel("PSI")
+#    ax.set_yscale("log")
+#    ax.yaxis._set_scale('log')
+    
+    step = 10
+    indx_x = np.arange(0, len(rbp_poss)-1, step)
+    indx_y = np.arange(0, len(vpols)-1, step)
+    fig, ax  = plt.subplots()
+    im = ax.imshow(rets)
+    cbar = ax.figure.colorbar(im, ax=ax)
+    cbar.ax.set_ylabel("ret %", rotation=-90, va="bottom")
     ax.set_xticks(indx_x)
     ax.set_yticks(indx_y)
     # ... and label them with the respective list entries.

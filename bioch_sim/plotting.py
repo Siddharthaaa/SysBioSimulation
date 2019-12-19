@@ -144,11 +144,11 @@ class SimPlotting:
             ax.plot(tt, mean, c = col, lw=3, label = p, alpha=1)
         return ax
     
-    def plot_parameters(self, parnames =[], ax=None):
+    def plot_parameters(self, parnames =[], parnames2=[], annotate=True, ax=None):
         
         if ax == None:
             fig, ax = plt.subplots(1, figsize=(10,3))
-        constants = self.params.copy()
+        constants = self._evaluate_pars()
         chd_pars = []
         t_events = sorted(self._time_events.copy())
         values = []
@@ -160,6 +160,10 @@ class SimPlotting:
                 ts.append(te.t)
                 chd_pars += te.apply_action(constants)
                 values.append(list(constants.values()))
+                if(annotate):
+                    ax.annotate(te.name, (te.t,0),  (-40, -(40+k*20)),
+                                textcoords = "offset pixels", 
+                                arrowprops={"arrowstyle": "-"})
         ts.append(self.runtime)
         values.append(list(constants.values()))
         values = np.array(values)
@@ -167,17 +171,21 @@ class SimPlotting:
             parnames = chd_pars
         indx = np.where([k  in parnames for k in constants])[0]
 #        values = values[:,indx]
-        print(ts)
+#        print(ts)
 #        print(values)
-        print(parnames)
+#        print(parnames)
         for ix, i in enumerate(indx):
             print(i)
             print(values[:,i])
-            ax.plot(ts, values[:,i], ls="--", lw=1.5, alpha=0.6,
+            ax.plot(ts, values[:,i], ls="--", lw=2, alpha=0.7,
                     label = list(constants)[i],
                     drawstyle = 'steps-post')
-        ax.legend()
-        
+        ax.legend(loc="upper left")
+        if len(parnames2)>0:
+            ax2 = ax.twinx()
+            self.plot_parameters(parnames=parnames2, annotate=False, ax=ax2)
+            ax2.legend(loc="upper right")
+            
     
     
     def plot_par_var_1d(self, par = "s1", vals = [1,2,3,4,5], label = None,
