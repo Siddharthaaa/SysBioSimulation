@@ -477,7 +477,7 @@ class SimParam(SimPlotting, object):
             tt = np.append(tt, t_high)
 #            print("Rasterlen: ", len(tt))
 #            print(tt)
-            res = odeint(get_ODE_delta,y_0,tt,args = (self,))
+            res, full_out = odeint(get_ODE_delta,y_0,tt,args = (self,), full_output=1)
 #            print("Res Shape: ", res.shape)
             y_0 = np.insert(res[-1], 0, t_high)
             if te is not None:

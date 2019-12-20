@@ -20,7 +20,7 @@ RON_gene = True
 sim_series = False
 plot_3d_series_stoch = False
 plot_3d_series_det = True
-plot_3d_series_rbp_br_titr = True
+plot_3d_series_rbp_br_titr = False
 
 
 
@@ -28,7 +28,7 @@ spl_inh= False
 runtime = 60
 init_mol_count = 1000
 
-factor = 2
+factor = 4
 
 rbp_posistions = np.linspace(0, 700, 201)
 
@@ -44,9 +44,9 @@ if RON_gene:
     u1_3_pos = 690
     
     #exon definition rates
-    k1 = 1e-1 * factor
-    k2 = 1e-2 * factor
-    k3 = 1e-1 * factor
+    k1 = 5e-2 * factor
+    k2 = 2e-2 * factor
+    k3 = 1 * factor
     
     k1_i = 0
     k2_i = 0
@@ -59,16 +59,17 @@ if RON_gene:
                    * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
     
     
-    spl_r = 0.1
-    ret_r = 0.001
+    spl_r = 0.1 * factor
+    ret_r = 0.001 * factor
     
     rbp_pos = 350
-    rbp_inh = 0.99
+    rbp_inh = 0.98
     rbp_bbr = 1e-9 #basal binding rate
-    rbp_br = 0.1 * factor #pol2 associated binding rate
-    rbp_e_up = 20
-    rbp_e_down = 40
-    rbp_h_c = 10
+    rbp_br = 26*k2 #pol2 associated binding rate
+    rbp_br = 0.6 #pol2 associated binding rate
+    rbp_e_up = 30
+    rbp_e_down = 50
+    rbp_h_c = 6
     
     pol_dist = 10 # max nt's after pol can bring somth. to nascRNA
     
@@ -76,27 +77,43 @@ if RON_gene:
 else: #experimental parameters
     runtime = 20
     gene_len = 700
+    vpol = 50
+    
     u1_1_pos = 210
     u2_1_pos = 300
     u1_2_pos = 443
     u2_2_pos = 520
     u1_3_pos = 690
     
-    spl_i_tau = 4e-2
-    spl_s_tau = 1e-1
+    #exon definition rates
+    k1 = 5e-2 * factor
+    k2 = 2e-2 * factor
+    k3 = 1 * factor
     
-    rbp_pos = 250
-    rbp_radius = 40
+    k1_i = 0
+    k2_i = 0
+    k3_i = 0
+    
+    k1_inh = "k1_t * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k2_inh = "k2_t * (1-rbp_inh*asym_porximity(rbp_pos, u2_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_porximity(rbp_pos, u1_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k3_inh = "k3_t * (1-rbp_inh*asym_porximity(rbp_pos, u1_3_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
     
     
-    rbp_br = 1e-1
-    rbp_ur = 1e-3
-#    rbp_br = 20 * factor
-#    rbp_ur = 0.0 * factor
+    spl_r = 0.1 * factor
+    ret_r = 0.001 * factor
     
-    rbp_hill_c = 10
+    rbp_pos = 350
+    rbp_inh = 0.98
+    rbp_bbr = 1e-9 #basal binding rate
+    rbp_br = 26*k2 #pol2 associated binding rate
+    rbp_br = 0.6 #pol2 associated binding rate
+    rbp_e_up = 30
+    rbp_e_down = 50
+    rbp_h_c = 6
     
-    vpol = 60
+    pol_dist = 10 # max nt's after pol can bring somth. to nascRNA
 
     
 params = {"vpol": vpol,
@@ -165,7 +182,7 @@ if(extended_model):
     
     s.add_reaction("P111*spl_i", {"P111":-1, "Incl": 1}, "inclusion")
     s.add_reaction("P101*spl_s", {"P101":-1, "Skip": 1}, "skipping")
-    s.add_reaction("P111*spl_s", {"P111":-1, "Skip": 1}, "skipping")
+#    s.add_reaction("P111*spl_s", {"P111":-1, "Skip": 1}, "skipping")
     
     if spl_inh:
         s.add_reaction("P111_inh*spl_i * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
@@ -186,8 +203,8 @@ if(extended_model):
         
         s.add_reaction("P101_inh*spl_s",
                        {"P101_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
-        s.add_reaction("P111_inh*spl_s",
-                       {"P111_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
+#        s.add_reaction("P111_inh*spl_s",
+#                       {"P111_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
         
     
     
@@ -295,11 +312,11 @@ if plot_3d_series_stoch:
 if plot_3d_series_det:
 
     s.set_runtime(1e5)
-    s.set_raster(101)
+    s.set_raster(1001)
     vpols = np.linspace(1,400,100)
     vpols = np.logspace(0,3,50)
     rbp_poss = np.linspace(425, 435, 31)
-    rbp_poss = np.linspace(100, 600, 101)
+    rbp_poss = np.linspace(150, 350, 41)
     X, Y = np.meshgrid(rbp_poss, np.log10(vpols))
     
     Z = np.zeros((len(vpols), len(rbp_poss)))
@@ -309,10 +326,15 @@ if plot_3d_series_det:
         s.set_param("vpol", vpol)
         for j, rbp_p in enumerate(rbp_poss):
             s.set_param("rbp_pos", rbp_p)
+            print(vpol, rbp_p)
+            
             res = s.simulate(stoch=False, ODE=True)
             incl = s.get_res_col("Incl", method="ODE")[-1]
             skip = s.get_res_col("Skip", method="ODE")[-1]
             ret = s.get_res_col("ret", method="ODE")[-1]
+            if(ret<0 or incl <0 or skip <0):
+                print("AAAAAAAAAAAAAAA\n", "vpol:", vpol, "rbp_pos", rbp_p)
+                print(ret, incl, skip)
             psi = incl/(incl+skip)
             ret_perc = ret/init_mol_count
             Z[i,j] = psi
@@ -343,25 +365,26 @@ if plot_3d_series_det:
     row_labels = vpols[indx_y]
     ax.set_xticklabels(col_labels, fontsize = 10, rotation=60)
     ax.set_yticklabels(row_labels, fontsize = 10)
-   
+    ax.set_xlabel("RBP pos")
+    ax.set_ylabel("vpol")
 
 if plot_3d_series_rbp_br_titr:
 
-    s.set_runtime(1e4)
-    s.set_raster(101)
-    s.set_param("rbp_pos", 320)
+    s.set_runtime(1e5)
+    s.set_raster(1001)
+    s.set_param("rbp_pos", 310)
     vpols = np.linspace(1,400,100)
     vpols = np.logspace(0,3,50)
-    rbp_poss = np.linspace(0.01, 0.5, 100)
-    X, Y = np.meshgrid(rbp_poss, np.log10(vpols))
+    rbp_brs = np.linspace(0.01, 0.5, 50)
+    X, Y = np.meshgrid(rbp_brs, np.log10(vpols))
     
-    Z = np.zeros((len(vpols), len(rbp_poss)))
+    Z = np.zeros((len(vpols), len(rbp_brs)))
     rets = np.array(Z)
     
     for i, vpol in enumerate(vpols):
         s.set_param("vpol", vpol)
-        for j, rbp_p in enumerate(rbp_poss):
-            s.set_param("rbp_br_t", rbp_p)
+        for j, rbp_br in enumerate(rbp_brs):
+            s.set_param("rbp_br_t", rbp_br)
             res = s.simulate(stoch=False, ODE=True)
             incl = s.get_res_col("Incl", method="ODE")[-1]
             skip = s.get_res_col("Skip", method="ODE")[-1]
@@ -382,7 +405,7 @@ if plot_3d_series_rbp_br_titr:
 #    ax.yaxis._set_scale('log')
     
     step = 10
-    indx_x = np.arange(0, len(rbp_poss)-1, step)
+    indx_x = np.arange(0, len(rbp_brs)-1, step)
     indx_y = np.arange(0, len(vpols)-1, step)
     fig, ax  = plt.subplots()
     im = ax.imshow(rets)
@@ -391,9 +414,18 @@ if plot_3d_series_rbp_br_titr:
     ax.set_xticks(indx_x)
     ax.set_yticks(indx_y)
     # ... and label them with the respective list entries.
-    col_labels = rbp_poss[indx_x]
+    col_labels = rbp_brs[indx_x]
     row_labels = vpols[indx_y]
     ax.set_xticklabels(col_labels, fontsize = 10, rotation=60)
     ax.set_yticklabels(row_labels, fontsize = 10)
-   
+    ax.set_xlabel("RBP binding rate")
+    ax.set_ylabel("vpol")
 
+if False:
+    vpol = 1.3257113655901092
+    rbp_p = 325
+    s.set_param("vpol", vpol)
+    s.set_param("rbp_pos", rbp_p)
+    s.simulate_ODE = True
+    s.simulate(ODE=True)
+    s.show_interface()
