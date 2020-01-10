@@ -68,6 +68,11 @@ class SimParam(SimPlotting, object):
         self._is_compiled = self._dynamic_compile
         self._reset_results()
     
+    def set_init_species(self, name = "", value = 0):
+        if name == "":
+            return False
+        self.init_state[name] = value
+    
     def _reset_results(self):
         self.bimodality = {}    
         self.results={}
@@ -492,7 +497,7 @@ class SimParam(SimPlotting, object):
         
 
         results = np.concatenate(list(results))
-        print("Before Reshape: ", results.shape)
+#        print("Before Reshape: ", results.shape)
         #remove/flatten first dimension
 #        print(results)
 #        results = results.reshape(-1, res.shape[-1])

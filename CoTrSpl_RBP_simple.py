@@ -23,7 +23,7 @@ plot_3d_series = False
 runtime = 60
 init_mol_count = 10000
 
-factor = 2
+factor = 20
 
 if RON_gene:
     runtime = 20

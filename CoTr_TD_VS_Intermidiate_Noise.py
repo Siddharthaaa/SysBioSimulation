@@ -10,15 +10,15 @@ Created on Mon Nov 11 10:13:21 2019
 import bioch_sim as bs
 import matplotlib.pyplot as plt
 import support_th as sth
+from scipy.stats import binom
 
 import numpy as np
 
-sims_count = 100
+sims_count = 10
 
 gene_length = 800 #nt
 init_mol_count = 50
 
-analytical = True
 variance_analysis = True
 
 fontsize=10
@@ -42,7 +42,7 @@ plt.rc("font", size=fontsize)
 
 model_id = 1
 
-vpols = np.logspace(0,3,100)
+vpols = np.logspace(0,3,5)
 
 kesc = 1
 vpol = 50
@@ -320,53 +320,65 @@ ax = None
 #fig, ax = plt.subplots()
 
 if (variance_analysis):
-    models_res = {}
-    for model in [1,3,5,7,"test"]:
-        psis_all1 = np.zeros((int(sims_count), len(vpols)))
-        psis_all2 = np.zeros((int(sims_count), len(vpols)))    
+    fig, ax = plt.subplots()
+    for mol_count, ls  in zip([10, 30, 100],  ["-","--",":"]):
         
-        for j, vpol in enumerate(vpols):
-            step_sim, td_sim = get_models(model, vpol = vpol)
-        
-            for i in range(sims_count):
-                # step model
-                avg_tr_time = gene_length/vpol
-    #            kelong = l/avg_tr_time
-    #            step_sim.set_param("k_elong", kelong)
-                step_sim.simulate()
-                incl = step_sim.get_res_col("Incl")[-1]
-                skip = step_sim.get_res_col("Skip")[-1]
-                
-                psis_all1[i,j] = incl/(incl+skip)
-                
-    #            t_per_step = avg_tr_time / l
-    #            # time delays model
-    #            tau1 = t_per_step * k
-    #            tau2 = t_per_step * m1
-    #            tau3 = t_per_step * (m1 + m2)
-    #            tau4 = t_per_step * (l-n)
-    #            
-    #            te1.set_time(tau1)
-    #            te2.set_time(tau2)
-    #            te3.set_time(tau3)
-    #            te4.set_time(tau4)
-                td_sim.simulate()
-                incl = td_sim.get_res_col("Incl")[-1]
-                skip = td_sim.get_res_col("Skip")[-1]
-                psis_all2[i,j] = incl/(incl+skip)
-        
-        psis_stds = np.std(psis_all1, axis=0)
-        psis_means = np.mean(psis_all1, axis=0)
-        models_res[model] = [psis_means, psis_stds]
+        models_res = {}
+        for model in [1,3,5,7,"test"]:
+            psis_all1 = np.zeros((int(sims_count), len(vpols)))
+            psis_all2 = np.zeros((int(sims_count), len(vpols)))    
+            
+            for j, vpol in enumerate(vpols):
+                step_sim, td_sim = get_models(model, vpol = vpol)
+                step_sim.set_init_species("p1", mol_count)
+                for i in range(sims_count):
+                    # step model
+                    avg_tr_time = gene_length/vpol
+        #            kelong = l/avg_tr_time
+        #            step_sim.set_param("k_elong", kelong)
+                    step_sim.simulate()
+                    incl = step_sim.get_res_col("Incl")[-1]
+                    skip = step_sim.get_res_col("Skip")[-1]
+                    
+                    psis_all1[i,j] = incl/(incl+skip)
+                    
+        #            t_per_step = avg_tr_time / l
+        #            # time delays model
+        #            tau1 = t_per_step * k
+        #            tau2 = t_per_step * m1
+        #            tau3 = t_per_step * (m1 + m2)
+        #            tau4 = t_per_step * (l-n)
+        #            
+        #            te1.set_time(tau1)
+        #            te2.set_time(tau2)
+        #            te3.set_time(tau3)
+        #            te4.set_time(tau4)
+#                    td_sim.simulate()
+#                    incl = td_sim.get_res_col("Incl")[-1]
+#                    skip = td_sim.get_res_col("Skip")[-1]
+#                    psis_all2[i,j] = incl/(incl+skip)
+            
+            psis_stds = np.std(psis_all1, axis=0)
+            psis_means = np.mean(psis_all1, axis=0)
+            models_res[model] = [psis_means, psis_stds]
         
     #    ax.scatter(psis_means, psis_stds, marker="o", alpha=0.5, label="model: %s" % str(model))
     
-    fig, ax = plt.subplots()
-    for m, v in models_res.items():
-        ax.scatter(v[0], v[1], alpha=0.6, label="model: %s" % str(m))
-    ax.legend()
+        leg_els =[]
+        for (m, v), c in zip(models_res.items(),["red", "blue", "green", "orange","purple"]):
+            leg_els.append(ax.scatter(v[0], v[1], alpha=0.6, color = c
+#                       ,label="model: %s" % str(m)
+                       ))
+        psis_th = np.linspace(0,1,100)
+        b_stds = [binom.std(mol_count, p)/mol_count for p in psis_th]
+        ax.plot(psis_th, b_stds, color = "black", lw=2,ls=ls,
+                alpha = 0.7,
+                label = "binom. (mc:%d)" % mol_count )
+    ax.legend(loc=2)
+    legend1 = plt.legend(leg_els, loc=1)
+    ax.add_artist(legend1)
     ax.set_ylabel("std(PSI)")
     ax.set_xlabel("mean(PSI)")
-    ax.set_title("Noise (mc:%d, sim_count: %d)" % (init_mol_count, sims_count ))
+    ax.set_title("Noise ( sim_count: %d)" % init_mol_count)
     #plot noises
 

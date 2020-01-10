@@ -17,20 +17,21 @@ import numpy as np
 
 extended_model = True
 RON_gene = True
-sim_series = False
+sim_series_rbp_pos = False
+sim_series_vpol = True
 plot_3d_series_stoch = False
 plot_3d_series_det = True
-plot_3d_series_rbp_br_titr = False
-
-
+plot_3d_series_rbp_br_titr = True
 
 spl_inh= False
+
+
 runtime = 60
 init_mol_count = 1000
 
-factor = 4
+factor = 5
 
-rbp_posistions = np.linspace(0, 700, 201)
+rbp_posistions = np.linspace(150, 300, 201)
 
 if RON_gene:
     runtime = 20
@@ -44,8 +45,8 @@ if RON_gene:
     u1_3_pos = 690
     
     #exon definition rates
-    k1 = 5e-2 * factor
-    k2 = 2e-2 * factor
+    k1 = 2e-1 * factor
+    k2 = 1e-2 * factor
     k3 = 1 * factor
     
     k1_i = 0
@@ -60,18 +61,20 @@ if RON_gene:
     
     
     spl_r = 0.1 * factor
-    ret_r = 0.001 * factor
+    ret_r = 0.0001 * factor
     
     rbp_pos = 350
-    rbp_inh = 0.98
+    rbp_inh = 0.97
     rbp_bbr = 1e-9 #basal binding rate
-    rbp_br = 26*k2 #pol2 associated binding rate
-    rbp_br = 0.6 #pol2 associated binding rate
+#    rbp_br = 26*k2 #pol2 associated binding rate
+    rbp_br = 10 * k1#pol2 associated binding rate
+    rbp_br = 0.1 * factor #pol2 associated binding rate
+    rbp_br = 60 #pol2 associated binding rate
     rbp_e_up = 30
     rbp_e_down = 50
     rbp_h_c = 6
     
-    pol_dist = 10 # max nt's after pol can bring somth. to nascRNA
+    pol_dist = 20 # max nt's after pol can bring somth. to nascRNA
     
     
 else: #experimental parameters
@@ -114,7 +117,6 @@ else: #experimental parameters
     rbp_h_c = 6
     
     pol_dist = 10 # max nt's after pol can bring somth. to nascRNA
-
     
 params = {"vpol": vpol,
         "gene_len": gene_len,
@@ -230,15 +232,15 @@ s.compile_system()
 #s.simulate()
 #s.plot_course()
 #s.draw_pn(engine="dot", rates=False)
-s.show_interface()
+#s.show_interface()
 inh_curve = 'norm_proximity(t*vpol, rbp_pos, rbp_radius, rbp_hill_c)'
 #s.plot_course(products= [inh_curve])
 
 s.plot_parameters(parnames=["k1","k2","k3","k1_inh","k2_inh","k3_inh", "ret_r"],
                   parnames2=["rbp_br"])
 
-if sim_series:
-    s.set_runtime(1e4)
+if sim_series_rbp_pos:
+    s.set_runtime(1e5)
     psis = []
     rets = []
     for i, rbp_pos in enumerate(rbp_posistions):
@@ -270,6 +272,66 @@ if sim_series:
 #    inh_curve_pos350 = [bs.norm_proximity(rbp_p,350 , rbp_radius, rbp_hill_c) for rbp_p in rbp_posistions]
 #    ax2.plot(rbp_posistions,inh_curve_pos350, label = "Inh. range on 350", linestyle=":", color="orange")
     ax2.legend()
+    
+if sim_series_vpol:
+    vpols = np.logspace(0,3.5,50)
+    rbp_pos = 220
+    s.set_raster(30001)
+    s.set_runtime(1e5)
+    s.set_param("rbp_pos", rbp_pos)
+#    s.set_param("rbp_br", 2)
+    psis = []
+    psis_no_rbp = []
+    psis_full_rbp = []
+    rets = []
+    rbp_reacts = []
+    _rbp_br = s.params["rbp_br_t"]
+    for i, vpol in enumerate(vpols):
+        print("Sim count: %d" % i)
+        s.set_param("vpol", vpol)
+#        s.simulate_ODE = True
+        s.simulate(stoch=False, ODE=True)
+#        psi = s.get_psi_mean(ignore_fraction = 0.4)
+        incl = s.get_res_col("Incl", method="ODE")[-1]
+        skip = s.get_res_col("Skip", method="ODE")[-1]
+        rbp_r = s.get_res_col("TEST_SKIP", method="ODE")[-1]
+        rbp_r += s.get_res_col("TEST_INCL", method="ODE")[-1]
+        rbp_reacts.append(rbp_r/(incl + skip))
+        psi = incl/(incl+skip)
+        psis.append(psi)
+        ret = s.get_res_col("ret", method="ODE")[-1]
+        rets.append(ret/init_mol_count)
+        
+        s.set_param("rbp_br_t", 0)
+        s.simulate(stoch=False, ODE=True)
+        incl = s.get_res_col("Incl", method="ODE")[-1]
+        skip = s.get_res_col("Skip", method="ODE")[-1]
+        psi = incl/(incl+skip)
+        psis_no_rbp.append(psi)
+        
+        s.set_param("rbp_br_t", 1e6)
+        s.simulate(stoch=False, ODE=True)
+        incl = s.get_res_col("Incl", method="ODE")[-1]
+        skip = s.get_res_col("Skip", method="ODE")[-1]
+        psi = incl/(incl+skip)
+        psis_full_rbp.append(psi)
+        
+        s.set_param("rbp_br_t", _rbp_br)
+        
+    
+    fig, ax = plt.subplots()
+    ax.plot(vpols, psis, lw=2, label = "PSI")
+    ax.plot(vpols, psis_no_rbp, lw=2, ls=":", label = "PSI default")
+    ax.plot(vpols, psis_full_rbp, lw=2, ls=":", label = "PSI 100% rbp")
+    ax.plot(vpols, rets, lw=1, label="ret %")
+    ax.plot(vpols, rbp_reacts, lw=1, ls="--", label="% of spl. after RBP bind.")
+    
+    ax.set_xlabel("vpol [nt/s]")
+    ax.set_ylabel("PSI")
+    ax.set_title("rbp pos: %d, rbp_br: %d" % (rbp_pos, rbp_br))
+    ax.set_xscale("log")
+    ax.legend()
+    
 
 if plot_3d_series_stoch:
 
@@ -312,11 +374,11 @@ if plot_3d_series_stoch:
 if plot_3d_series_det:
 
     s.set_runtime(1e5)
-    s.set_raster(1001)
+    s.set_raster(100001)
     vpols = np.linspace(1,400,100)
     vpols = np.logspace(0,3,50)
     rbp_poss = np.linspace(425, 435, 31)
-    rbp_poss = np.linspace(150, 350, 41)
+    rbp_poss = np.linspace(100, 600, 101)
     X, Y = np.meshgrid(rbp_poss, np.log10(vpols))
     
     Z = np.zeros((len(vpols), len(rbp_poss)))
@@ -326,7 +388,7 @@ if plot_3d_series_det:
         s.set_param("vpol", vpol)
         for j, rbp_p in enumerate(rbp_poss):
             s.set_param("rbp_pos", rbp_p)
-            print(vpol, rbp_p)
+#            print(vpol, rbp_p)
             
             res = s.simulate(stoch=False, ODE=True)
             incl = s.get_res_col("Incl", method="ODE")[-1]
@@ -371,11 +433,11 @@ if plot_3d_series_det:
 if plot_3d_series_rbp_br_titr:
 
     s.set_runtime(1e5)
-    s.set_raster(1001)
-    s.set_param("rbp_pos", 310)
+    s.set_raster(30001)
+    s.set_param("rbp_pos", 220)
     vpols = np.linspace(1,400,100)
     vpols = np.logspace(0,3,50)
-    rbp_brs = np.linspace(0.01, 0.5, 50)
+    rbp_brs = np.linspace(10, 100, 50)
     X, Y = np.meshgrid(rbp_brs, np.log10(vpols))
     
     Z = np.zeros((len(vpols), len(rbp_brs)))
@@ -421,9 +483,11 @@ if plot_3d_series_rbp_br_titr:
     ax.set_xlabel("RBP binding rate")
     ax.set_ylabel("vpol")
 
+print(s.param_str(",\n"))
+
 if False:
-    vpol = 1.3257113655901092
-    rbp_p = 325
+    vpol = 91.02981779915217
+    rbp_p = 330
     s.set_param("vpol", vpol)
     s.set_param("rbp_pos", rbp_p)
     s.simulate_ODE = True
