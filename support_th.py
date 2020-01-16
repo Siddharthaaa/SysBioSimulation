@@ -817,11 +817,12 @@ def numerical_derivation(x, y):
     l = len(x)
     res = np.zeros(l)
     for i in range(l):
-        if(i<l-1):
-            res[i] = (y[i+1] - y[i])/(x[i+1] - x[i])
+        if(i == 0):
+            res[i] = (y[1] -y[0])/(x[1]-x[0])
+        elif(i == l-1):
+            res[i] = (y[l-1] - y[l-2])/(x[l-1] - x[l-2])
         else:
-            res[i] = res[i-1] + (res[i-1] - res[i-2])
-#            res[i] = res[i-1]
+            res[i] = (y[i+1] - y[i-1])/(x[i+1] - x[i-1])
     return res
 
 def get_zero_points(x, y):

@@ -163,7 +163,7 @@ class SimParam(SimPlotting, object):
         res += "\\\\\n"
         res += "\\end{pmatrix},\\\\ \n"
         res += "M = \\begin{pmatrix}\n"
-        res += "\\\\\n".join([k for k,v in self.init_state.items()])
+        res += "\\\\\n".join([ k for k,v in self.init_state.items()])
         res += "\\end{pmatrix}\n"
         res += "= \\begin{pmatrix}\n"
         res += "\\\\\n".join([str(v) for k,v in self.init_state.items()])
@@ -171,7 +171,7 @@ class SimParam(SimPlotting, object):
         res += "\\end{pmatrix}\n"
         
         res += "\\end{align}\n"
-        res = re.sub("_","\\\\textunderscore ", res)
+        res = re.sub("_", r"\_", res)
         res = re.sub("\*","\\\\cdot ", res)
         r = Tk()
         r.withdraw()
@@ -505,10 +505,6 @@ class SimParam(SimPlotting, object):
 #            return np.hstack((tt.reshape(len(tt),1),results))
             
     
-   
-    
-    
-    
     def set_result(self, name, res):
         self.results[name] = res
     def get_result(self, name):
@@ -547,6 +543,7 @@ class SimParam(SimPlotting, object):
         f_str += "\tt=_st[0]\n"
         f_str += "\t_u_pre(_st, _pars, _pre)\n"
         expr = self._sub_vars(expr, par_name="_pars", place_name="_st")
+        expr = re.sub("\\bcheck_pre\\b", "True", expr)
         f_str += "\treturn " + expr + "\n"
         f_str += "self._f_tmp = _f\n"
 #        print("AAAAAAAAAAA\n",f_str)

@@ -14,16 +14,15 @@ from scipy.stats import binom
 
 import numpy as np
 
-sims_count = 5000
+sims_count = 3000
 
 gene_length = 800 #nt
 trscrpt_start = 700 #nt
 trscrpt_end = 1000 #nt
 tr_len = trscrpt_end - trscrpt_start
 
-init_mol_count = 50
+init_mol_count = 100
 
-variance_analysis = True
 
 fontsize=10
 plt.rc('xtick', labelsize=fontsize)    # fontsize of the tick labels
@@ -46,7 +45,7 @@ plt.rc("font", size=fontsize)
 
 model_id = 1
 
-vpols = np.logspace(0,3,40)
+vpols = np.logspace(0,3,50)
 
 kesc = 1
 vpol = 50
@@ -330,50 +329,48 @@ ax = None
 
 #fig, ax = plt.subplots()
 
-if (variance_analysis):
-    fig, ax = plt.subplots()
-    for mol_count, ls  in zip([10, 30, 100,1000],  ["-","--","-.",":"]):
-        
-        models_res = {}
-        for model in [1,3,5,7,"test"]:
-            psis_all1 = np.zeros((int(sims_count), len(vpols)))
-            psis_all2 = np.zeros((int(sims_count), len(vpols)))    
-            step_sim, td_sim = get_models(model, vpol = vpol)
-            td_sim.set_init_species("mRNA", mol_count)
-            for j, vpol in enumerate(vpols):
-                td_sim.set_param("vpol", vpol)
-                for i in range(sims_count):
-   
-                    td_sim.simulate()
-                    incl = td_sim.get_res_col("Incl")[-1]
-                    skip = td_sim.get_res_col("Skip")[-1]
-                    
-                    psis_all1[i,j] = incl/(incl+skip)
-                    
-   
-            psis_stds = np.std(psis_all1, axis=0)
-            psis_means = np.mean(psis_all1, axis=0)
-            models_res[model] = [psis_means, psis_stds]
-        
-    #    ax.scatter(psis_means, psis_stds, marker="o", alpha=0.5, label="model: %s" % str(model))
+
+
+
     
-        leg_els =[]
-        for (m, v), c in zip(models_res.items(),["red", "blue", "green", "orange","purple"]):
-            leg_els.append(ax.scatter(v[0], v[1], alpha=0.6, color = c
-#                       ,label="model: %s" % str(m)
-                       ))
-        psis_th = np.linspace(0,1,100)
-        b_stds = [binom.std(mol_count, p)/mol_count for p in psis_th]
-        ax.plot(psis_th, b_stds, color = "black", lw=2,ls=ls,
-                alpha = 0.7,
-                label = "binom. (mc:%d)" % mol_count )
-    leg1 = ax.legend(loc=2)
-    black_dot, = plt.plot([], "o", color = "black")
-#    plt.legend([red_dot],["AAAA"])
-    leg2 = plt.legend([black_dot], ["models"], loc=1)
-    ax.add_artist(leg1)
-    ax.set_ylabel("std(PSI)")
-    ax.set_xlabel("mean(PSI)")
-    ax.set_title("Noise ( sim_count: %d)" % sims_count)
+models_res = {}
+for model in [1,2]:
+    psis = np.zeros(len(vpols))
+    psis_td = np.zeros(len(vpols))
+    step_sim, td_sim = get_models(model, vpol = vpol)
+    step_sim.set_init_species("p1", init_mol_count)
+    td_sim.set_init_species("p1", init_mol_count)
+    step_sim.set_raster(33333)
+    td_sim.set_raster(33333)
+    for j, vpol in enumerate(vpols):
+        step_sim.set_param("vpol", vpol)
+        td_sim.set_param("vpol", vpol)
+       
+        step_sim.simulate(ODE=True)
+        td_sim.simulate(ODE=True)
+        
+        incl = step_sim.get_res_col("Incl", method="ODE")[-1]
+        skip = step_sim.get_res_col("Skip", method="ODE")[-1]
+        psis[j] = incl/(incl+skip)
+            
+        incl = td_sim.get_res_col("Incl", method="ODE")[-1]
+        skip = td_sim.get_res_col("Skip", method="ODE")[-1]
+        psis_td[j] = incl/(incl+skip)
+            
+    models_res[model] = psis
+
+#    ax.scatter(psis_means, psis_stds, marker="o", alpha=0.5, label="model: %s" % str(model))
+fig, ax = plt.subplots()
+leg_els =[]
+for (m, v), name in zip(models_res.items(),["few steps (8)", "many steps(80)", "green", "orange","purple"]):
+    leg_els.append(ax.plot(vpols, v, lw=2
+                       ,label=name
+               ))
+ax.plot(vpols[0::5], psis_td[0::5],"bo", c="black", lw=1, label="time delay model")
+ax.set_xscale("log")
+ax.set_ylabel("PSI")
+ax.set_xlabel("vpol [nt/s]")
+ax.legend()
+ax.set_title("Model comparison")
     #plot noises
 

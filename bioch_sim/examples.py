@@ -297,6 +297,165 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         s.set_param("rbp_radius", 100)
         s.set_param("rbp_br", 1)
         s.set_param("rbp_ur", 0.2)
+      
+        
+    return s
+
+def get_exmpl_CoTrSpl(extended_model = True):
+    
+    spl_inh = False
+    
+    factor = 5
+    init_mol_count = 100
+    
+    runtime = 20
+    gene_len = 700
+    vpol = 100
+    
+    u1_1_pos = 210
+    u2_1_pos = 300
+    u1_2_pos = 443
+    u2_2_pos = 520
+    u1_3_pos = 690
+    
+    #exon definition rates
+    k1 = 2e-1 * factor
+    k2 = 1e-2 * factor
+    k3 = 1 * factor
+    
+    k1_i = 0
+    k2_i = 0
+    k3_i = 0
+    
+    k1_inh = "k1_t * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k2_inh = "k2_t * (1-rbp_inh*asym_porximity(rbp_pos, u2_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_porximity(rbp_pos, u1_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k3_inh = "k3_t * (1-rbp_inh*asym_porximity(rbp_pos, u1_3_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    
+    
+    spl_r = 0.1 * factor
+    ret_r = 0.001 * factor
+    
+    rbp_pos = 350
+    rbp_inh = 0.97
+    rbp_bbr = 1e-9 #basal binding rate
+#    rbp_br = 26*k2 #pol2 associated binding rate
+    rbp_br = 10 * k1#pol2 associated binding rate
+    rbp_br = 0.1 * factor #pol2 associated binding rate
+    rbp_br = 60 #pol2 associated binding rate
+    rbp_e_up = 30
+    rbp_e_down = 50
+    rbp_h_c = 6
+    
+    pol_dist = 20 # max nt's after pol can bring somth. to nascRNA
+    params = {"vpol": vpol,
+        "gene_len": gene_len,
+        "u1_1_pos": u1_1_pos , # U1 binding site position
+        "u1_2_pos": u1_2_pos ,
+        "u2_1_pos": u2_1_pos, # U2 bind. site pos 1
+        "u2_2_pos": u2_2_pos,
+        "u1_3_pos": u1_3_pos,
+        
+        "k1": k1_i,
+        "k2": k2_i,
+        "k3": k3_i,
+        "k1_t": k1,
+        "k2_t": k2,
+        "k3_t": k3,
+        
+        "k1_inh": 0,
+        "k2_inh": 0,
+        "k3_inh": 0,
+        
+        "k1_inh_t": k1_inh,
+        "k2_inh_t": k2_inh,
+        "k3_inh_t": k3_inh,
         
         
+        "rbp_pos": rbp_pos,
+        "rbp_bbr": rbp_bbr,
+        "rbp_br": 0,
+        "rbp_br_t": rbp_br,
+        "rbp_e_up": rbp_e_up,
+        "rbp_e_down": rbp_e_down,
+        "rbp_h_c": rbp_h_c,
+        "rbp_inh": rbp_inh,
+        "pol_dist": pol_dist,
+        "spl_i": spl_r,
+        "spl_s": spl_r*0.5,
+        "ret_r": 0,
+        "ret_r_t": ret_r
+        
+        }
+    if(extended_model):
+        s = bs.SimParam("CoTrSpl_RBP_extended", runtime, 10001, params = params,
+                        init_state = {"P000": init_mol_count})
+        
+        for ext in ["", "_inh"]:
+            s.add_reaction("P000"+ext+"*k1"+ext, {"P100"+ext+"":1, "P000"+ext+"":-1}, "E1 def")
+            s.add_reaction("P000"+ext+"*k2"+ext, {"P010"+ext+"":1, "P000"+ext+"":-1}, "E2 def")
+            s.add_reaction("P000"+ext+"*k3"+ext, {"P001"+ext+"":1, "P000"+ext+"":-1}, "E3 def")
+            s.add_reaction("P100"+ext+"*k2"+ext, {"P110"+ext+"":1, "P100"+ext+"":-1}, "E2 def")
+            s.add_reaction("P100"+ext+"*k3"+ext, {"P101"+ext+"":1, "P100"+ext+"":-1}, "E3 def")
+            s.add_reaction("P010"+ext+"*k1"+ext, {"P110"+ext+"":1, "P010"+ext+"":-1}, "E1 def")
+            s.add_reaction("P010"+ext+"*k3"+ext, {"P011"+ext+"":1, "P010"+ext+"":-1}, "E3 def")
+            s.add_reaction("P001"+ext+"*k1"+ext, {"P101"+ext+"":1, "P001"+ext+"":-1}, "E1 def")
+            s.add_reaction("P001"+ext+"*k2"+ext, {"P011"+ext+"":1, "P001"+ext+"":-1}, "E2 def")
+            
+            s.add_reaction("P110"+ext+"*k3"+ext, {"P111"+ext+"":1, "P110"+ext+"":-1}, "E3 def")
+            s.add_reaction("P101"+ext+"*k2"+ext, {"P111"+ext+"":1, "P101"+ext+"":-1}, "E2 def")
+            s.add_reaction("P011"+ext+"*k1"+ext, {"P111"+ext+"":1, "P011"+ext+"":-1}, "E1 def")
+        
+        for spec in ["P000", "P001", "P010", "P100", "P011", "P101", "P110", "P111"]:
+            spec_i = spec + "_inh"
+            s.add_reaction(spec + "*rbp_br", {spec:-1, spec_i:1}, "inh.")
+            s.add_reaction(spec + "*ret_r", {spec:-1, "ret":1}, "retention")
+            s.add_reaction(spec_i + "*ret_r", {spec_i:-1, "ret":1}, "retention")
+        
+        s.add_reaction("P111*spl_i", {"P111":-1, "Incl": 1}, "inclusion")
+        s.add_reaction("P101*spl_s", {"P101":-1, "Skip": 1}, "skipping")
+    #    s.add_reaction("P111*spl_s", {"P111":-1, "Skip": 1}, "skipping")
+        
+        if spl_inh:
+            s.add_reaction("P111_inh*spl_i * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                           * (1-rbp_inh*asym_porximity(rbp_pos, u2_1_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
+                           * (1-rbp_inh*asym_porximity(rbp_pos, u1_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
+                           * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+                           {"P111_inh":-1, "Incl":1, "TEST_INCL":1}, "inclusion")
+            
+            s.add_reaction("P101_inh*spl_s * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                           * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+                           {"P101_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
+    #        s.add_reaction("P111_inh*spl_s * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+    #                       * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+    #                       {"P111_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
+        else:
+            s.add_reaction("P111_inh*spl_i",
+                           {"P111_inh":-1, "Incl":1, "TEST_INCL":1}, "inclusion")
+            
+            s.add_reaction("P101_inh*spl_s",
+                           {"P101_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
+    #        s.add_reaction("P111_inh*spl_s",
+    #                       {"P111_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
+        
+    
+    
+    else: #TODO
+        pass
+    
+    te1 = TimeEvent("u1_1_pos/vpol", "k1=k1_t; k1_inh=k1_inh_t", name="Ex1 avail")
+    te2 = TimeEvent("u1_2_pos/vpol", "k2=k2_t; k2_inh=k2_inh_t", name="Ex2 avail")
+    te3 = TimeEvent("u1_3_pos/vpol", "k3=k3_t; k3_inh=k3_inh_t", name="Ex3 avail")
+    te4 = TimeEvent("rbp_pos/vpol", "rbp_br=rbp_br_t", name="RBP b. start")
+    te5 = TimeEvent("(rbp_pos+pol_dist)/vpol", "rbp_br=rbp_bbr", name="RBP b. end")
+    te6 = TimeEvent("gene_len/vpol", "ret_r = ret_r_t", name="ret possible")
+    #
+    s.add_timeEvent(te1)
+    s.add_timeEvent(te2)
+    s.add_timeEvent(te3)
+    s.add_timeEvent(te4)
+    s.add_timeEvent(te5)
+    s.add_timeEvent(te6)
+    
     return s

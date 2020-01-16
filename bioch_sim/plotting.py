@@ -131,8 +131,9 @@ class SimPlotting:
         if type(products) == str:
             products = [products]
         if len(products) == 0:
-            products = list(self.init_state.keys())[0]
+            products = list(self.init_state.keys())
             
+        print(products)  
         indx = np.where((self.raster >= t_bounds[0]) * (self.raster <= t_bounds[1]))[0]
         tt = self.raster[indx]
         indices, colors = self._get_indices_and_colors(products)
@@ -142,6 +143,7 @@ class SimPlotting:
             mean = np.mean(results, axis = 0)
             ax.plot(tt, results.T, c=col, lw=0.2, alpha=0.5)
             ax.plot(tt, mean, c = col, lw=3, label = p, alpha=1)
+        ax.legend()
         return ax
     
     def plot_parameters(self, parnames =[], parnames2=[], annotate=True, ax=None):

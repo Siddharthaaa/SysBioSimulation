@@ -17,11 +17,11 @@ import numpy as np
 
 extended_model = True
 RON_gene = True
-sim_series_rbp_pos = False
-sim_series_vpol = True
+sim_series_rbp_pos = True
+sim_series_vpol = False
 plot_3d_series_stoch = False
-plot_3d_series_det = True
-plot_3d_series_rbp_br_titr = True
+plot_3d_series_det = False
+plot_3d_series_rbp_br_titr = False
 
 spl_inh= False
 
@@ -31,12 +31,12 @@ init_mol_count = 1000
 
 factor = 5
 
-rbp_posistions = np.linspace(150, 300, 201)
+rbp_posistions = np.linspace(50, 700, 201)
 
 if RON_gene:
     runtime = 20
     gene_len = 700
-    vpol = 50
+    vpol = 100
     
     u1_1_pos = 210
     u2_1_pos = 300
@@ -61,7 +61,7 @@ if RON_gene:
     
     
     spl_r = 0.1 * factor
-    ret_r = 0.0001 * factor
+    ret_r = 0.001 * factor
     
     rbp_pos = 350
     rbp_inh = 0.97
@@ -196,9 +196,9 @@ if(extended_model):
         s.add_reaction("P101_inh*spl_s * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
                        * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
                        {"P101_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
-        s.add_reaction("P111_inh*spl_s * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                       * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
-                       {"P111_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
+#        s.add_reaction("P111_inh*spl_s * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+#                       * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+#                       {"P111_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
     else:
         s.add_reaction("P111_inh*spl_i",
                        {"P111_inh":-1, "Incl":1, "TEST_INCL":1}, "inclusion")
@@ -232,7 +232,7 @@ s.compile_system()
 #s.simulate()
 #s.plot_course()
 #s.draw_pn(engine="dot", rates=False)
-#s.show_interface()
+s.show_interface()
 inh_curve = 'norm_proximity(t*vpol, rbp_pos, rbp_radius, rbp_hill_c)'
 #s.plot_course(products= [inh_curve])
 
@@ -241,15 +241,21 @@ s.plot_parameters(parnames=["k1","k2","k3","k1_inh","k2_inh","k3_inh", "ret_r"],
 
 if sim_series_rbp_pos:
     s.set_runtime(1e5)
+    s.set_raster(30001)
     psis = []
     rets = []
     for i, rbp_pos in enumerate(rbp_posistions):
         print("Sim count: %d" % i)
         s.set_param("rbp_pos", rbp_pos)
-        s.simulate()
-        psi = s.get_psi_mean(ignore_fraction = 0.4)
-        psis.append(psi)
-        ret = s.get_res_col("ret")[-1]
+        s.simulate(stoch=False, ODE=True)
+        incl = s.get_res_col("Incl", method="ODE")[-1]
+        skip = s.get_res_col("Skip", method="ODE")[-1]
+        rbp_r = s.get_res_col("TEST_SKIP", method="ODE")[-1]
+        rbp_r += s.get_res_col("TEST_INCL", method="ODE")[-1]
+#        psi = s.get_psi_mean(ignore_fraction = 0.4)
+        psi = incl/(incl+skip)
+        psis.append(psi)   
+        ret = s.get_res_col("ret", "ODE")[-1]
         rets.append(ret/init_mol_count)
     
     fig, ax = plt.subplots()
