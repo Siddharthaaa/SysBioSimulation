@@ -26,7 +26,7 @@ import numpy as np
 
 # 7: branched early inh bell few steps
 # 8: branched early inh bell many steps
-model_id = 1
+model_id = 7
 
 sims_count = 10
 
@@ -129,9 +129,11 @@ if model_id == 3:
     
     len_per_step = tr_len/l
     vpolOI = len_per_step*(m1) * ki
-    vpol_oi[vpolOI] = "vpol: $ki*\\tau1=1$"
-    vpolOI = len_per_step*(m2) * (kesc + ki)
-    vpol_oi[vpolOI] = "vpol: $(kesc + ki)*\\tau2=1$"
+    vpol_oi[vpolOI] = "vpol: $ki*\\tau_{inh,1}=1$"
+    vpolOI = len_per_step*(m2) * (kesc)
+    vpol_oi[vpolOI] = "vpol: $(kesc)*(\\tau_{inh,2}-\\tau_{inh,1})=1$"
+#    vpolOI = len_per_step*(m2) * (kesc+ki)
+#    vpol_oi[vpolOI] = "vpol: $(kesc + ki)*(\\tau_{inh,2}-\\tau_{inh,1})=1$"
 
 if model_id == 4:
     l=80
@@ -157,9 +159,11 @@ if model_id == 5:
     kesc = 0.5
     k_elongs = np.logspace(0,3,40)
     
-#    psi_slow = ki/(ki+kesc)
-#    psi_fast = ki/(ki+ks)
-#    psi_inter = ki/(ki+kesc)
+    len_per_step = tr_len/l
+    vpolOI = len_per_step*(m2) * kesc
+    vpol_oi[vpolOI] = "vpol: $kesc*\\tau_{inh,2}=1$"
+    vpolOI = len_per_step*(l-n-(m1+m2)) * ki
+    vpol_oi[vpolOI] = "vpol: $ki*(\\tau-\\tau_{inh,2})=1$"
 
 if model_id == 6:
     
@@ -186,6 +190,12 @@ if model_id == 7:
     ks = 2e-1
     kesc = 2e-1
     k_elongs = np.logspace(0,3.2,40)
+    
+    len_per_step = tr_len/l
+    vpolOI = len_per_step*(m2) * kesc
+    vpol_oi[vpolOI] = "vpol: $kesc*\\tau_{inh,2}=1$"
+    vpolOI = len_per_step*(l-n-(m1+m2)) * ki
+    vpol_oi[vpolOI] = "vpol: $ki*(\\tau-\\tau_{inh,2})=1$"
 
 if model_id == 8:
     l = 80
@@ -274,11 +284,11 @@ s1 = bs.SimParam("CoTrSpl_general_TD",
 
 s1.add_reaction("mRNA*ki", {"Incl":1, "mRNA":-1})
 s1.add_reaction("mRNA*ks", {"Skip":1, "mRNA":-1})
-s1.add_reaction("mRNA*kesc", {"mRNAbr":1, "mRNA":-1})
+s1.add_reaction("mRNA*kesc", {"mRNAinh":1, "mRNA":-1, "ESC":1})
 if(kesc_r > 0):
-    s1.add_reaction("mRNAbr*kesc_r", {"mRNAbr":-1, "mRNA":1})
+    s1.add_reaction("mRNAinh*kesc_r", {"mRNAinh":-1, "mRNA":1})
     
-s1.add_reaction("mRNAbr*ks", {"Skip":1, "mRNAbr":-1})
+s1.add_reaction("mRNAinh*ks", {"Skip":1, "mRNAinh":-1})
 
 tau1 = "tr_len/l/vpol * %d" % k
 tau2 = "tr_len/l/vpol * %d" % m1
@@ -344,6 +354,7 @@ psis_all2 = np.zeros((int(sims_count), len(vpols)))
 
 psis_det_step = np.zeros( len(vpols))
 psis_det_td = np.zeros( len(vpols))
+esc_det_td = np.zeros(len(vpols))
 #td_sim.show_interface()
 #step_sim.show_interface()
 
@@ -365,12 +376,19 @@ if deterministic_solution:
         
         incl = td_sim.get_res_col("Incl", method="ODE")[-1]
         skip = td_sim.get_res_col("Skip", method="ODE")[-1]
+        esc = td_sim.get_res_col("ESC", method="ODE")[-1]
+        esc_det_td[j] = esc/init_mol_count
         psis_det_td[j] = incl/(incl+skip)
         
     #    ax.plot(vpols, psis_all2.T, lw=0.1, alpha=1, color="grey", antialiased=True)
 #    ax.plot(vpols, psis_det_step, lw=3, color="red", label= "step model" )
     ax.plot(vpols, psis_det_td, lw=3, color="green", label="time delay model")
+    
     ax.plot(vpols_analyt, psis_analyt, "bo",ms=8,  label="analytic solution")
+    if(False):
+        ax_twin = ax.twinx()
+        ax_twin.plot(vpols, esc_det_td, lw=1, color="black", label="share of $mRNA_{inh}$")
+        ax_twin.legend(loc = (1.15,0))
     
     ax.set_title("Model: %s" % str(model_id))
     ax.set_xscale("log")
@@ -379,11 +397,12 @@ if deterministic_solution:
         
     ax.axhline(psi_slow, linestyle="--", lw=1.5, color="green", label = "PSI slow")
     ax.axhline(psi_fast, linestyle="-.", lw=1.5, color="red", label = "PSI fast")
-#    ax.axhline(psi_inter, linestyle=":", lw=1.5, color="blue", label = "PSI medium")
+    ax.axhline(psi_inter, linestyle=":", lw=1.5, color="blue", label = "PSI medium")
     
-    for key,val in vpol_oi.items():
-        ax.axvline(key, ls = ":", lw=2, label = val)
-    ax.legend()
+    for i ,(key,val) in enumerate(vpol_oi.items()):
+        ax.axvline(key, ls = "-", lw=1, label = val, c = "C"+ str(i))
+    ax.legend(loc = (1.15,0.3), frameon = False)
+    plt.tight_layout()
     
     
 if stochastic_analysis:

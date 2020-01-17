@@ -16,9 +16,9 @@ import numpy as np
 
 
 extended_model = True
-RON_gene = True
-sim_series_rbp_pos = True
-sim_series_vpol = False
+RON_gene = False
+sim_series_rbp_pos = False
+sim_series_vpol = True
 plot_3d_series_stoch = False
 plot_3d_series_det = False
 plot_3d_series_rbp_br_titr = False
@@ -29,7 +29,7 @@ spl_inh= False
 runtime = 60
 init_mol_count = 1000
 
-factor = 5
+factor = 20
 
 rbp_posistions = np.linspace(50, 700, 201)
 
@@ -232,7 +232,7 @@ s.compile_system()
 #s.simulate()
 #s.plot_course()
 #s.draw_pn(engine="dot", rates=False)
-s.show_interface()
+#s.show_interface()
 inh_curve = 'norm_proximity(t*vpol, rbp_pos, rbp_radius, rbp_hill_c)'
 #s.plot_course(products= [inh_curve])
 
@@ -281,7 +281,7 @@ if sim_series_rbp_pos:
     
 if sim_series_vpol:
     vpols = np.logspace(0,3.5,50)
-    rbp_pos = 220
+    rbp_pos = 380
     s.set_raster(30001)
     s.set_runtime(1e5)
     s.set_param("rbp_pos", rbp_pos)
@@ -334,9 +334,9 @@ if sim_series_vpol:
     
     ax.set_xlabel("vpol [nt/s]")
     ax.set_ylabel("PSI")
-    ax.set_title("rbp pos: %d, rbp_br: %d" % (rbp_pos, rbp_br))
+    ax.set_title("rbp pos: %d, rbp_br: %.2f" % (rbp_pos, rbp_br))
     ax.set_xscale("log")
-    ax.legend()
+    ax.legend(loc = (1.1, 0.2))
     
 
 if plot_3d_series_stoch:
@@ -419,9 +419,11 @@ if plot_3d_series_det:
 #    ax.set_yscale("log")
 #    ax.yaxis._set_scale('log')
     
-    step = 10
+    #heatmaps 
+    step = 5
     indx_x = np.arange(0, len(rbp_poss)-1, step)
     indx_y = np.arange(0, len(vpols)-1, step)
+    
     fig, ax  = plt.subplots()
     im = ax.imshow(rets)
     cbar = ax.figure.colorbar(im, ax=ax)
@@ -429,8 +431,22 @@ if plot_3d_series_det:
     ax.set_xticks(indx_x)
     ax.set_yticks(indx_y)
     # ... and label them with the respective list entries.
-    col_labels = rbp_poss[indx_x]
-    row_labels = vpols[indx_y]
+    col_labels = [ "%.2f" % v for v in rbp_poss[indx_x]]
+    row_labels = ["%.2f" % v for v  in vpols[indx_y]]
+    ax.set_xticklabels(col_labels, fontsize = 10, rotation=60)
+    ax.set_yticklabels(row_labels, fontsize = 10)
+    ax.set_xlabel("RBP pos")
+    ax.set_ylabel("vpol")
+    
+    fig, ax  = plt.subplots()
+    im = ax.imshow(Z)
+    cbar = ax.figure.colorbar(im, ax=ax)
+    cbar.ax.set_ylabel("PSI", rotation=-90, va="bottom")
+    ax.set_xticks(indx_x)
+    ax.set_yticks(indx_y)
+    # ... and label them with the respective list entries.
+#    col_labels = rbp_poss[indx_x]
+#    row_labels = vpols[indx_y]
     ax.set_xticklabels(col_labels, fontsize = 10, rotation=60)
     ax.set_yticklabels(row_labels, fontsize = 10)
     ax.set_xlabel("RBP pos")
