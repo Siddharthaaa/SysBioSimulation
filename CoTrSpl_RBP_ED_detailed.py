@@ -16,11 +16,12 @@ import numpy as np
 
 
 extended_model = True
-RON_gene = False
+RON_gene = True
+test_pars = True
 sim_series_rbp_pos = False
 sim_series_vpol = True
 plot_3d_series_stoch = False
-plot_3d_series_det = False
+plot_3d_series_det = True
 plot_3d_series_rbp_br_titr = False
 
 spl_inh= False
@@ -29,7 +30,7 @@ spl_inh= False
 runtime = 60
 init_mol_count = 1000
 
-factor = 20
+factor = 10
 
 rbp_posistions = np.linspace(50, 700, 201)
 
@@ -49,15 +50,15 @@ if RON_gene:
     k2 = 1e-2 * factor
     k3 = 1 * factor
     
-    k1_i = 0
+    k1_i = 0 # initial value
     k2_i = 0
     k3_i = 0
     
-    k1_inh = "k1_t * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
-    k2_inh = "k2_t * (1-rbp_inh*asym_porximity(rbp_pos, u2_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                   * (1-rbp_inh*asym_porximity(rbp_pos, u1_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
-    k3_inh = "k3_t * (1-rbp_inh*asym_porximity(rbp_pos, u1_3_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                   * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k1_inh = "k1_t * (1-rbp_inh*asym_proximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k2_inh = "k2_t * (1-rbp_inh*asym_proximity(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_proximity(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k3_inh = "k3_t * (1-rbp_inh*asym_proximity(u1_3_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
     
     
     spl_r = 0.1 * factor
@@ -78,6 +79,7 @@ if RON_gene:
     
     
 else: #experimental parameters
+    factor = 20
     runtime = 20
     gene_len = 700
     vpol = 50
@@ -97,11 +99,11 @@ else: #experimental parameters
     k2_i = 0
     k3_i = 0
     
-    k1_inh = "k1_t * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
-    k2_inh = "k2_t * (1-rbp_inh*asym_porximity(rbp_pos, u2_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                   * (1-rbp_inh*asym_porximity(rbp_pos, u1_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
-    k3_inh = "k3_t * (1-rbp_inh*asym_porximity(rbp_pos, u1_3_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                   * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k1_inh = "k1_t * (1-rbp_inh*asym_proximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k2_inh = "k2_t * (1-rbp_inh*asym_proximity(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_proximity(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k3_inh = "k3_t * (1-rbp_inh*asym_proximity(u1_3_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
     
     
     spl_r = 0.1 * factor
@@ -112,6 +114,48 @@ else: #experimental parameters
     rbp_bbr = 1e-9 #basal binding rate
     rbp_br = 26*k2 #pol2 associated binding rate
     rbp_br = 0.6 #pol2 associated binding rate
+    rbp_e_up = 30
+    rbp_e_down = 50
+    rbp_h_c = 6
+    
+    pol_dist = 10 # max nt's after pol can bring somth. to nascRNA
+    
+if test_pars:
+    factor = 1
+    runtime = 20
+    gene_len = 700
+    vpol = 50
+    
+    u1_1_pos = 210
+    u2_1_pos = 300
+    u1_2_pos = 443
+    u2_2_pos = 520
+    u1_3_pos = 690
+    
+    #exon definition rates
+    k1 = 1 * factor
+    k2 = 0.1 * factor
+    k3 = 2 * factor
+    
+    k1_i = 0
+    k2_i = 0
+    k3_i = 0
+    
+    k1_inh = "k1_t * (1-rbp_inh*asym_proximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k2_inh = "k2_t * (1-rbp_inh*asym_proximity(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_proximity(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k3_inh = "k3_t * (1-rbp_inh*asym_proximity(u1_3_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    
+    
+    spl_r = 0.2 * factor
+    ret_r = 0.001 * factor
+    
+    rbp_pos = 350
+    rbp_inh = 0.98
+    rbp_bbr = 1e-9 #basal binding rate
+    rbp_br = 26*k2 #pol2 associated binding rate
+    rbp_br = 1 #pol2 associated binding rate
     rbp_e_up = 30
     rbp_e_down = 50
     rbp_h_c = 6
@@ -187,17 +231,17 @@ if(extended_model):
 #    s.add_reaction("P111*spl_s", {"P111":-1, "Skip": 1}, "skipping")
     
     if spl_inh:
-        s.add_reaction("P111_inh*spl_i * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                       * (1-rbp_inh*asym_porximity(rbp_pos, u2_1_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
-                       * (1-rbp_inh*asym_porximity(rbp_pos, u1_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
-                       * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+        s.add_reaction("P111_inh*spl_i * (1-rbp_inh*asym_proximity( u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                       * (1-rbp_inh*asym_proximity(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
+                       * (1-rbp_inh*asym_proximity(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
+                       * (1-rbp_inh*asym_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
                        {"P111_inh":-1, "Incl":1, "TEST_INCL":1}, "inclusion")
         
-        s.add_reaction("P101_inh*spl_s * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                       * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+        s.add_reaction("P101_inh*spl_s * (1-rbp_inh*asym_proximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                       * (1-rbp_inh*asym_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
                        {"P101_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
-#        s.add_reaction("P111_inh*spl_s * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-#                       * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+#        s.add_reaction("P111_inh*spl_s * (1-rbp_inh*asym_proximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+#                       * (1-rbp_inh*asym_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
 #                       {"P111_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
     else:
         s.add_reaction("P111_inh*spl_i",
@@ -271,9 +315,9 @@ if sim_series_rbp_pos:
     ax.axvline(u2_2_pos, label="U22", linestyle="-.", lw =0.7)#, color = "red")
     ax.legend()
     ax2 = ax.twinx()
-    inh_curve_u11 = [bs.asym_porximity(rbp_p, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_posistions]
+    inh_curve_u11 = [bs.asym_proximity(rbp_p, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_posistions]
     ax2.plot(rbp_posistions,inh_curve_u11, label = "Inh. range on U11", linestyle=":", color="red")
-    inh_curve_u22 = [bs.asym_porximity(rbp_p, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_posistions]
+    inh_curve_u22 = [bs.asym_proximity(rbp_p, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_posistions]
     ax2.plot(rbp_posistions,inh_curve_u22, label = "Inh. range on U22", linestyle=":", color="green")
 #    inh_curve_pos350 = [bs.norm_proximity(rbp_p,350 , rbp_radius, rbp_hill_c) for rbp_p in rbp_posistions]
 #    ax2.plot(rbp_posistions,inh_curve_pos350, label = "Inh. range on 350", linestyle=":", color="orange")
@@ -326,9 +370,9 @@ if sim_series_vpol:
         
     
     fig, ax = plt.subplots()
-    ax.plot(vpols, psis, lw=2, label = "PSI")
-    ax.plot(vpols, psis_no_rbp, lw=2, ls=":", label = "PSI default")
-    ax.plot(vpols, psis_full_rbp, lw=2, ls=":", label = "PSI 100% rbp")
+    ax.plot(vpols, psis, lw=4, label = "PSI")
+    ax.plot(vpols, psis_no_rbp, lw=1.5, ls=":", label = "PSI default")
+    ax.plot(vpols, psis_full_rbp, lw=1.5, ls=":", label = "PSI 100% rbp")
     ax.plot(vpols, rets, lw=1, label="ret %")
     ax.plot(vpols, rbp_reacts, lw=1, ls="--", label="% of spl. after RBP bind.")
     
@@ -380,11 +424,11 @@ if plot_3d_series_stoch:
 if plot_3d_series_det:
 
     s.set_runtime(1e5)
-    s.set_raster(100001)
+    s.set_raster(30001)
     vpols = np.linspace(1,400,100)
-    vpols = np.logspace(0,3,50)
+    vpols = np.logspace(0,3,51)
     rbp_poss = np.linspace(425, 435, 31)
-    rbp_poss = np.linspace(100, 600, 101)
+    rbp_poss = np.linspace(100, 600, 51)
     X, Y = np.meshgrid(rbp_poss, np.log10(vpols))
     
     Z = np.zeros((len(vpols), len(rbp_poss)))
@@ -420,7 +464,7 @@ if plot_3d_series_det:
 #    ax.yaxis._set_scale('log')
     
     #heatmaps 
-    step = 5
+    step = 4
     indx_x = np.arange(0, len(rbp_poss)-1, step)
     indx_y = np.arange(0, len(vpols)-1, step)
     

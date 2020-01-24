@@ -17,6 +17,7 @@ from scipy.stats import gaussian_kde
 import matplotlib
 from tkinter import Tk 
 import pickle
+import math
 
 
 
@@ -171,12 +172,12 @@ def load_sims(file_name=None):
         sims= pickle.load(f)
     return sims
 
-@nb.njit(nb.f8(nb.f8, nb.f8, nb.f8))
+@nb.njit#(nb.f8(nb.f8, nb.f8, nb.f8))
 def hill(x, Ka, n):
     if x > 0:
         return 1/(1 + (Ka/x)**n)
-    return 0
-
+    else:
+        return 0
 
 
 def heatmap(data, row_labels, col_labels, ax=None,
@@ -307,7 +308,7 @@ def norm_proximity(x, a , r=1 , p=2):
         return int(dist<=r)
 
 @nb.njit
-def asym_porximity(x, a, l = 2, r=1, p=4):
+def asym_proximity(x, a, l = 2, r=1, p=4):
     dist = x-a
     if p == 0:
         if dist < 0:
@@ -319,3 +320,17 @@ def asym_porximity(x, a, l = 2, r=1, p=4):
             return (1/(1+(-dist/l)**p))
         else:
             return (1/(1+(dist/r)**p))
+@nb.njit
+def asym_proximity_2(x, a, l = 2, r=1, p=4):
+    hill1 = hill(x, a-l,p)
+    hill2 = hill(x, a+r,p)
+    return hill1-hill2
+@nb.njit
+def sin_proximity(x, a, l = 2, r=1, p=1):
+    dist = x-a
+    if dist<0:
+        d_norm = math.pi * dist/l if abs(dist) <= l else 0
+    else:
+        d_norm = math.pi * dist/r if dist <= r else 0
+        
+    return math.sin(d_norm)

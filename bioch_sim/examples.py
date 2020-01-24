@@ -327,11 +327,11 @@ def get_exmpl_CoTrSpl(extended_model = True):
     k2_i = 0
     k3_i = 0
     
-    k1_inh = "k1_t * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
-    k2_inh = "k2_t * (1-rbp_inh*asym_porximity(rbp_pos, u2_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                   * (1-rbp_inh*asym_porximity(rbp_pos, u1_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
-    k3_inh = "k3_t * (1-rbp_inh*asym_porximity(rbp_pos, u1_3_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                   * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k1_inh = "k1_t * (1-rbp_inh*asym_porximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k2_inh = "k2_t * (1-rbp_inh*asym_porximity(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_porximity(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k3_inh = "k3_t * (1-rbp_inh*asym_porximity(u1_3_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_porximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
     
     
     spl_r = 0.1 * factor
@@ -418,17 +418,17 @@ def get_exmpl_CoTrSpl(extended_model = True):
     #    s.add_reaction("P111*spl_s", {"P111":-1, "Skip": 1}, "skipping")
         
         if spl_inh:
-            s.add_reaction("P111_inh*spl_i * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                           * (1-rbp_inh*asym_porximity(rbp_pos, u2_1_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
-                           * (1-rbp_inh*asym_porximity(rbp_pos, u1_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
-                           * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+            s.add_reaction("P111_inh*spl_i * (1-rbp_inh*asym_porximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                           * (1-rbp_inh*asym_porximity(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
+                           * (1-rbp_inh*asym_porximity(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
+                           * (1-rbp_inh*asym_porximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
                            {"P111_inh":-1, "Incl":1, "TEST_INCL":1}, "inclusion")
             
-            s.add_reaction("P101_inh*spl_s * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                           * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+            s.add_reaction("P101_inh*spl_s * (1-rbp_inh*asym_porximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                           * (1-rbp_inh*asym_porximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
                            {"P101_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
-    #        s.add_reaction("P111_inh*spl_s * (1-rbp_inh*asym_porximity(rbp_pos, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-    #                       * (1-rbp_inh*asym_porximity(rbp_pos, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+    #        s.add_reaction("P111_inh*spl_s * (1-rbp_inh*asym_porximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+    #                       * (1-rbp_inh*asym_porximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
     #                       {"P111_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
         else:
             s.add_reaction("P111_inh*spl_i",

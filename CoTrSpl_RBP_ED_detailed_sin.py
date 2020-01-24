@@ -17,10 +17,10 @@ import numpy as np
 
 extended_model = True
 RON_gene = True
-sim_series_rbp_pos = False
+sim_series_rbp_pos = True
 
-sim_series_vpol = True
-sim_series_vpol_ext = True
+sim_series_vpol = False
+sim_series_vpol_ext = False
 sim_series_vpol_legend = False
 vpol_profile_rbp_pos = 300
 
@@ -31,7 +31,7 @@ plot_3d_series_rbp_br_titr = False
 spl_inh= False
 
 
-figure = "Fig 3B5"
+figure = None
 
 runtime = 60
 init_mol_count = 1000
@@ -50,22 +50,22 @@ if RON_gene:
     u1_3_pos = 690
     
     #exon definition rates
-    k1 = 10 
-    k2 = 1 
-    k3 = 3 
+    k1 = 2e-1
+    k2 = 1e-1 
+    k3 = 1
     
     k1_i = 0
     k2_i = 0
     k3_i = 0
     
-    k1_inh = "k1_t * (1-rbp_inh*asym_proximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
-    k2_inh = "k2_t * (1-rbp_inh*asym_proximity(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                   * (1-rbp_inh*asym_proximity(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
-    k3_inh = "k3_t * (1-rbp_inh*asym_proximity(u1_3_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                   * (1-rbp_inh*asym_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k1_inh = "k1_t * (1-rbp_inh*sin_proximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k2_inh = "k2_t * (1-rbp_inh*sin_proximity(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*sin_proximity(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k3_inh = "k3_t * (1-rbp_inh*sin_proximity(u1_3_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*sin_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
     
     
-    spl_r = 2 
+    spl_r = 10 
     ret_r = 0.001 
     
     rbp_pos = 350
@@ -74,10 +74,10 @@ if RON_gene:
 #    rbp_br = 26*k2 #pol2 associated binding rate
     rbp_br = 10 * k1#pol2 associated binding rate
     rbp_br = 0.1  #pol2 associated binding rate
-    rbp_br = 2 #pol2 associated binding rate
+    rbp_br = 10 #pol2 associated binding rate
     rbp_e_up = 30
     rbp_e_down = 50
-    rbp_h_c = 6
+    rbp_h_c = 4
     
     pol_dist = 20 # max nt's after pol can bring somth. to nascRNA
     
@@ -89,7 +89,7 @@ if figure == "Fig 3B1": # decreasing
     k2 = 5e-2
     k3 = 1e-1
     rbp_inh = 0.99
-    sim_series_vpol_ext = True
+    sim_series_vpol_ext = False
     
 if figure == "Fig 3B2": # increasing
     sim_series_vpol = True
@@ -100,7 +100,7 @@ if figure == "Fig 3B2": # increasing
     k1 = 10
     k2 = 1e-1
     k3 =2e-2
-    sim_series_vpol_ext = True
+    sim_series_vpol_ext = False
         
 if figure == "Fig 3B3": # bell shape
     sim_series_vpol = True
@@ -111,7 +111,7 @@ if figure == "Fig 3B3": # bell shape
     k1 = 10
     k2 = 3e-1
     k3 = 3
-    sim_series_vpol_ext = True
+    sim_series_vpol_ext = False
     
 if figure == "Fig 3B4": # u-shape
     sim_series_vpol = True
@@ -122,7 +122,7 @@ if figure == "Fig 3B4": # u-shape
     k2 = 5e-1
     k3 = 2e-1
     rbp_inh = 0.98
-    sim_series_vpol_ext = True
+    sim_series_vpol_ext = False
     
 if figure == "Fig 3B5": # 2 extremes 
     sim_series_vpol = True
@@ -217,17 +217,17 @@ if(extended_model):
 #    s.add_reaction("P111*spl_s", {"P111":-1, "Skip": 1}, "skipping")
     
     if spl_inh:
-        s.add_reaction("P111_inh*spl_i * (1-rbp_inh*asym_proximity( u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                       * (1-rbp_inh*asym_proximity(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
-                       * (1-rbp_inh*asym_proximity(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
-                       * (1-rbp_inh*asym_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+        s.add_reaction("P111_inh*spl_i * (1-rbp_inh*sin_proximity( u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                       * (1-rbp_inh*sin_proximity(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
+                       * (1-rbp_inh*sin_proximity(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
+                       * (1-rbp_inh*sin_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
                        {"P111_inh":-1, "Incl":1, "TEST_INCL":1}, "inclusion")
         
-        s.add_reaction("P101_inh*spl_s * (1-rbp_inh*asym_proximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                       * (1-rbp_inh*asym_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+        s.add_reaction("P101_inh*spl_s * (1-rbp_inh*sin_proximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                       * (1-rbp_inh*sin_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
                        {"P101_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
-#        s.add_reaction("P111_inh*spl_s * (1-rbp_inh*asym_proximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-#                       * (1-rbp_inh*asym_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+#        s.add_reaction("P111_inh*spl_s * (1-rbp_inh*sin_proximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+#                       * (1-rbp_inh*sin_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
 #                       {"P111_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
     else:
         s.add_reaction("P111_inh*spl_i",
@@ -237,6 +237,7 @@ if(extended_model):
                        {"P101_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
 #        s.add_reaction("P111_inh*spl_s",
 #                       {"P111_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
+        
     
     
 else: #TODO
@@ -262,7 +263,7 @@ s.compile_system()
 #s.plot_course()
 #s.draw_pn(engine="dot", rates=False)
 #s.show_interface()
-inh_curve = 'norm_proximity(t*vpol, rbp_pos, rbp_radius, rbp_hill_c)'
+#inh_curve = 'norm_proximity(t*vpol, rbp_pos, rbp_radius, rbp_hill_c)'
 #s.plot_course(products= [inh_curve])
 
 ax = s.plot_parameters(parnames=["k1","k2","k3","k1_inh","k2_inh","k3_inh"],
@@ -270,6 +271,7 @@ ax = s.plot_parameters(parnames=["k1","k2","k3","k1_inh","k2_inh","k3_inh"],
 ax.set_title("vpol: %d, rbp_pos: %d" % (vpol, rbp_pos))
 
 if sim_series_rbp_pos:
+    s.set_param("vpol", 60)
     s.set_runtime(1e5)
     s.set_raster(30001)
     psis = []
@@ -290,7 +292,7 @@ if sim_series_rbp_pos:
     
     fig, ax = plt.subplots()
     ax.plot(rbp_posistions, psis, lw=2, label = "PSI")
-    ax.plot(rbp_posistions, rets, lw=1, label="ret %")
+    ax.plot(rbp_posistions, rets, c = "red", lw=1, label="ret %")
     ax.set_xlabel("RBP pos")
     ax.set_ylabel("PSI")
     ax.set_title("u11: %d; u21: %d; u12: %d; u22: %d; Radius:(%d, %d)" % 
@@ -301,13 +303,15 @@ if sim_series_rbp_pos:
     ax.axvline(u2_2_pos, label="U22", linestyle="-.", lw =0.7)#, color = "red")
     ax.legend()
     ax2 = ax.twinx()
-    inh_curve_u11 = [bs.asym_proximity(rbp_p, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_posistions]
+    inh_curve_u11 = [bs.sin_proximity(rbp_p, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_posistions]
     ax2.plot(rbp_posistions,inh_curve_u11, label = "Inh. range on U11", linestyle=":", color="red")
-    inh_curve_u22 = [bs.asym_proximity(rbp_p, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_posistions]
+    inh_curve_u22 = [bs.sin_proximity(rbp_p, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_posistions]
     ax2.plot(rbp_posistions,inh_curve_u22, label = "Inh. range on U22", linestyle=":", color="green")
 #    inh_curve_pos350 = [bs.norm_proximity(rbp_p,350 , rbp_radius, rbp_hill_c) for rbp_p in rbp_posistions]
 #    ax2.plot(rbp_posistions,inh_curve_pos350, label = "Inh. range on 350", linestyle=":", color="orange")
     ax2.legend()
+#    ax_rbp_pos = ax
+#    ax_rbp_pos.plot(rbp_posistions, psis, lw=2, label = "PSI Hill")
     
 if sim_series_vpol:
     vpols = vpol_profile_vpols

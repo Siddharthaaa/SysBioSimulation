@@ -188,7 +188,7 @@ class SimPlotting:
             self.plot_parameters(parnames=parnames2, annotate=False, ax=ax2)
             ax2.legend(loc="upper right")
             
-    
+        return ax
     
     def plot_par_var_1d(self, par = "s1", vals = [1,2,3,4,5], label = None,
                         ax=None, plot_args = dict(), func=None, **func_pars):
