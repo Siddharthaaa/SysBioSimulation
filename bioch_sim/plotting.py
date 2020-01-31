@@ -146,7 +146,7 @@ class SimPlotting:
         ax.legend()
         return ax
     
-    def plot_parameters(self, parnames =[], parnames2=[], annotate=True, ax=None):
+    def plot_parameters(self, parnames =[], parnames2=[], annotate=True, ax=None, **plotargs):
         
         if ax == None:
             fig, ax = plt.subplots(1, figsize=(10,3))
@@ -179,9 +179,10 @@ class SimPlotting:
         for ix, i in enumerate(indx):
             print(i)
             print(values[:,i])
-            ax.plot(ts, values[:,i], ls="--", lw=2, alpha=0.7,
+            ax.plot(ts, values[:,i],
                     label = list(constants)[i],
-                    drawstyle = 'steps-post')
+                    drawstyle = 'steps-post',
+                    **plotargs)
         ax.legend(loc="upper left")
         if len(parnames2)>0:
             ax2 = ax.twinx()

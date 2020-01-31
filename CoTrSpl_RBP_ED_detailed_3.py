@@ -17,9 +17,10 @@ import numpy as np
 
 extended_model = True
 RON_gene = True
-sim_series_rbp_pos = False
+sim_series_rbp_pos = True
+sim_series_rbp_pos_vpol = 40
 
-sim_series_vpol = True
+sim_series_vpol = False
 sim_series_vpol_ext = True # adds additional information
 sim_series_vpol_legend = False
 vpol_profile_rbp_pos = 460
@@ -28,6 +29,8 @@ sim_series_vpol_br = 2
 plot_3d_series_stoch = False
 plot_3d_series_det = False
 plot_3d_series_rbp_br_titr = False
+
+inhibition_plot = True
 
 spl_inh= False
 
@@ -53,8 +56,8 @@ if RON_gene:
     
     #exon definition rates
     k1 = 0.1 
-    k2 = 0.1
-    k3 = 0.05 
+    k2 = 0.02
+    k3 = 0.1
     
     k1_i = 0
     k2_i = 0
@@ -70,16 +73,16 @@ if RON_gene:
     spl_r = 2 
     ret_r = 0.001 
     
-    rbp_pos = 350
-    rbp_inh = 0.99
+    rbp_pos = 480
+    rbp_inh = 0.98
     rbp_bbr = 1e-9 #basal binding rate
 #    rbp_br = 26*k2 #pol2 associated binding rate
     rbp_br = 10 * k1#pol2 associated binding rate
     rbp_br = 0.1  #pol2 associated binding rate
     rbp_br = 2 #pol2 associated binding rate
-    rbp_e_up = 30
-    rbp_e_down = 40
-    rbp_h_c = 6
+    rbp_e_up = 1
+    rbp_e_down = 70
+    rbp_h_c = 8
     
     pol_dist = 20 # max nt's after pol can bring somth. to nascRNA
     
@@ -250,7 +253,7 @@ te2 = bs.TimeEvent("u1_2_pos/vpol", "k2=k2_t; k2_inh=k2_inh_t", name="Ex2 avail"
 te3 = bs.TimeEvent("u1_3_pos/vpol", "k3=k3_t; k3_inh=k3_inh_t", name="Ex3 avail")
 te4 = bs.TimeEvent("rbp_pos/vpol", "rbp_br=rbp_br_t", name="RBP binding start")
 te5 = bs.TimeEvent("(rbp_pos+pol_dist)/vpol", "rbp_br=rbp_bbr", name="RBP binding end")
-te6 = bs.TimeEvent("gene_len/vpol", "ret_r = ret_r_t", name="Transl. end")
+te6 = bs.TimeEvent("gene_len/vpol", "ret_r = ret_r_t", name="Transcr. end")
 #
 s.add_timeEvent(te1)
 s.add_timeEvent(te2)
@@ -268,13 +271,41 @@ s.compile_system()
 inh_curve = 'norm_proximity(t*vpol, rbp_pos, rbp_radius, rbp_hill_c)'
 #s.plot_course(products= [inh_curve])
 
-ax = s.plot_parameters(parnames=["k1","k2","k3","k1_inh","k2_inh","k3_inh"],
-                  parnames2=["rbp_br"])
+#ax = s.plot_parameters(parnames=["k1","k2","k3","k1_inh","k2_inh","k3_inh"],
+#                  parnames2=["rbp_br"])
+
+fig, axs = plt.subplots(2)
+ax = s.plot_parameters(parnames=["k1","k2","k3"], annotate=False, ax = None, lw=3)
+ax = s.plot_parameters(parnames=["k1_inh","k2_inh","k3_inh"], annotate=False,
+                       ax=ax, lw=6, ls=(0,(1,3))
+                       ,dash_capstyle="round"
+                       ,dash_joinstyle = "round"
+        )
 ax.set_title("vpol: %d, rbp_pos: %d" % (vpol, rbp_pos))
+ax.set_title("vpol: %d, rbp_pos: %d, rbp_range:(%d, %d)" % (vpol, rbp_pos, rbp_e_up, rbp_e_down ))
+
+ax = s.plot_parameters(parnames=["rbp_br"], annotate=True, ax=None, lw=3)
+
+if (inhibition_plot):
+    fig, ax = plt.subplots()
+    rbpp = 0
+    rbp_poss = np.linspace(-70,100,100)
+    inh_curve_u11 = [bs.asym_proximity(rbp_p, rbpp, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_poss]
+    ax.plot(rbp_poss,inh_curve_u11, label = "$InhFunc$", linestyle="-", lw=3)
+    ax.axvline(rbpp, ls = "-.")
+#    ax.axvline(u1_2_pos, ls = ":")
+#    ax.axvline(u2_2_pos, ls = ":")
+#    ax.axvline(u1_3_pos, ls = ":", label="U22")
+    ax.legend()
+    k2_inh = s._evaluate_pars()["k2_inh_t"]
+    
+    ax.set_ylabel("Inhibition")
+    
 
 if sim_series_rbp_pos:
     s.set_runtime(1e5)
     s.set_raster(30001)
+    s.set_param("vpol", sim_series_rbp_pos_vpol)
     psis = []
     rets = []
     k2 = []

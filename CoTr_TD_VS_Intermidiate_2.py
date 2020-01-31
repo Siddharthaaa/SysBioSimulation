@@ -382,10 +382,10 @@ if deterministic_solution:
         
     #    ax.plot(vpols, psis_all2.T, lw=0.1, alpha=1, color="grey", antialiased=True)
 #    ax.plot(vpols, psis_det_step, lw=3, color="red", label= "step model" )
-    ax.plot(vpols, psis_det_td, lw=3, color="green", label="time delay model")
+    ax.plot(vpols, psis_det_td, lw=4, color="green", label="time delay model")
     
     ax.plot(vpols_analyt, psis_analyt, "bo",ms=8,  label="analytic solution")
-    if(False):
+    if(True):
         ax_twin = ax.twinx()
         ax_twin.plot(vpols, esc_det_td, lw=1, color="black", label="share of $mRNA_{inh}$")
         ax_twin.legend(loc = (1.15,0))
@@ -395,9 +395,9 @@ if deterministic_solution:
     ax.set_xlabel("vpol (nt/s)")
     ax.set_ylabel("PSI")
         
-    ax.axhline(psi_slow, linestyle="--", lw=1.5, color="green", label = "PSI slow")
-    ax.axhline(psi_fast, linestyle="-.", lw=1.5, color="red", label = "PSI fast")
-    ax.axhline(psi_inter, linestyle=":", lw=1.5, color="blue", label = "PSI medium")
+    ax.axhline(psi_slow, linestyle="--", lw=1, color="green", label = "PSI slow")
+    ax.axhline(psi_fast, linestyle="-.", lw=1, color="red", label = "PSI fast")
+    ax.axhline(psi_inter, linestyle=":", lw=1, color="blue", label = "PSI medium")
     
     for i ,(key,val) in enumerate(vpol_oi.items()):
         ax.axvline(key, ls = "-", lw=1, label = val, c = "C"+ str(i))
