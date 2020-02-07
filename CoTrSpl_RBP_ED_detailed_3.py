@@ -11,6 +11,7 @@ Created on Tue Nov 19 12:20:54 2019
 import bioch_sim as bs
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+from matplotlib import gridspec
 
 import numpy as np
 
@@ -18,7 +19,8 @@ import numpy as np
 extended_model = True
 RON_gene = True
 sim_series_rbp_pos = True
-sim_series_rbp_pos_vpol = 40
+sim_series_rbp_pos_vpol = 50
+
 
 sim_series_vpol = False
 sim_series_vpol_ext = True # adds additional information
@@ -41,7 +43,7 @@ runtime = 60
 init_mol_count = 1000
 
 vpol_profile_vpols = np.logspace(0,3,50)
-rbp_posistions = np.linspace(50, 700, 201)
+rbp_posistions = np.linspace(100, 600, 101)
 
 if RON_gene:
     runtime = 20
@@ -55,9 +57,9 @@ if RON_gene:
     u1_3_pos = 690
     
     #exon definition rates
-    k1 = 0.1 
-    k2 = 0.02
-    k3 = 0.1
+    k1 = 1
+    k2 = 1e-1
+    k3 = 1
     
     k1_i = 0
     k2_i = 0
@@ -74,14 +76,16 @@ if RON_gene:
     ret_r = 0.001 
     
     rbp_pos = 480
-    rbp_inh = 0.98
+    rbp_inh = 0.99
     rbp_bbr = 1e-9 #basal binding rate
 #    rbp_br = 26*k2 #pol2 associated binding rate
     rbp_br = 10 * k1#pol2 associated binding rate
     rbp_br = 0.1  #pol2 associated binding rate
-    rbp_br = 2 #pol2 associated binding rate
+    rbp_br = 5 #pol2 associated binding rate
     rbp_e_up = 1
-    rbp_e_down = 70
+    rbp_e_down = 80
+    rbp_e_up = 30
+    rbp_e_down = 40
     rbp_h_c = 8
     
     pol_dist = 20 # max nt's after pol can bring somth. to nascRNA
@@ -246,7 +250,9 @@ if(extended_model):
     
     
 else: #TODO
-    pass
+    s = bs.SimParam("CoTrSpl_RBP_extended", runtime, 10001, params = params,
+                    init_state = {"mRNA": init_mol_count})
+    s.add_reaction("mRNA*k1")
 
 te1 = bs.TimeEvent("u1_1_pos/vpol", "k1=k1_t; k1_inh=k1_inh_t", name="Ex1 avail")
 te2 = bs.TimeEvent("u1_2_pos/vpol", "k2=k2_t; k2_inh=k2_inh_t", name="Ex2 avail")
@@ -287,7 +293,7 @@ ax.set_title("vpol: %d, rbp_pos: %d, rbp_range:(%d, %d)" % (vpol, rbp_pos, rbp_e
 ax = s.plot_parameters(parnames=["rbp_br"], annotate=True, ax=None, lw=3)
 
 if (inhibition_plot):
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(3,2))
     rbpp = 0
     rbp_poss = np.linspace(-70,100,100)
     inh_curve_u11 = [bs.asym_proximity(rbp_p, rbpp, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_poss]
@@ -308,12 +314,21 @@ if sim_series_rbp_pos:
     s.set_param("vpol", sim_series_rbp_pos_vpol)
     psis = []
     rets = []
+    k1 = []
     k2 = []
     k3 = []
+    rbp_br = s.params["rbp_br_t"]
+    s.set_param("rbp_br_t", 0)
+    s.simulate(stoch=False, ODE=True)
+    incl = s.get_res_col("Incl", method="ODE")[-1]
+    skip = s.get_res_col("Skip", method="ODE")[-1]
+    psi_default = incl/(incl+skip)
+    s.set_param("rbp_br_t", rbp_br)
     for i, rbp_pos in enumerate(rbp_posistions):
         print("Sim count: %d" % i)
         s.set_param("rbp_pos", rbp_pos)
         params = s._evaluate_pars()
+        k1.append(params["k1_inh_t"])
         k2.append(params["k2_inh_t"])
         k3.append(params["k3_inh_t"])
         s.simulate(stoch=False, ODE=True)
@@ -327,29 +342,68 @@ if sim_series_rbp_pos:
         ret = s.get_res_col("ret", "ODE")[-1]
         rets.append(ret/init_mol_count)
     
-    fig, ax = plt.subplots()
-    ax.plot(rbp_posistions, psis, lw=3, label = "PSI")
-    ax.plot(rbp_posistions, rets, lw=1, label="ret %")
+    fig, ax = plt.subplots(figsize=(6,2))
+    ax.plot(rbp_posistions, psis, lw=4, label = "PSI")
+    ax.axhline(psi_default, lw=2, c ="black", ls="--", label="PSI default")
+    ax.plot(rbp_posistions, rets, lw=1, label="ret share")
    
     ax.set_xlabel("RBP pos")
     ax.set_ylabel("PSI")
     ax.set_title("u11: %d; u21: %d; u12: %d; u22: %d; Radius:(%d, %d)" % 
                  (u1_1_pos, u2_1_pos, u1_2_pos, u2_2_pos, rbp_e_up, rbp_e_down))
-    ax.axvline(u1_1_pos, label="U11", linestyle="-.",lw =0.7)#, color = "red")
-    ax.axvline(u2_1_pos, label="U21", linestyle="-.",lw =0.7)#, color = "red")
-    ax.axvline(u1_2_pos, label="U12", linestyle="-.", lw =0.7)#, color = "red")
-    ax.axvline(u2_2_pos, label="U22", linestyle="-.", lw =0.7)#, color = "red")
-    ax.legend()
-    ax2 = ax.twinx()
-#    ax2.plot(rbp_posistions, k2, lw =2, c = "red", ls = "-.", label="k2")
-#    ax2.plot(rbp_posistions, k3, lw =2, c = "green", ls = "-.", label = "k3")
+    ax.set_title("vpol: %d, max. inh.: %.2f; RBP radius:(%d, %d)" % 
+                 (sim_series_rbp_pos_vpol, rbp_inh, rbp_e_up, rbp_e_down))
+    ax.axvline(u1_1_pos, linestyle="-.",lw =0.7)#, color = "red")
+    ax.axvline(u2_1_pos, linestyle="-.",lw =0.7)#, color = "red")
+    ax.axvline(u1_2_pos, linestyle="-.", lw =0.7)#, color = "red")
+    ax.axvline(u2_2_pos, label="Splice sites", linestyle="-.", lw =0.7)#, color = "red")
+    ax.axhspan(psi_default, np.max(psis), facecolor = "green", alpha = 0.1)
+    ax.axhspan(psi_default, 0, facecolor = "red", alpha = 0.1)
+    fig.tight_layout()
+    ax.legend(loc = (1.1,0))
+    
+#    ax2 = ax.twinx()
+    fig, ax2 = plt.subplots(figsize=(6,1.5))
+    alpha = 1
+    ax2.plot(rbp_posistions, k1, lw =2, c = "blue", alpha=alpha, ls = "-.", label="k1_inh")
+    ax2.plot(rbp_posistions, k2, lw =2, c = "red", alpha=alpha, ls = "-.", label="k2_inh")
+    ax2.plot(rbp_posistions, k3, lw =2, c = "green", alpha=alpha, ls = "-.", label = "k3_inh")
     inh_curve_u11 = [bs.asym_proximity(rbp_p, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_posistions]
-    ax2.plot(rbp_posistions,inh_curve_u11, label = "Inh. range on U11", linestyle=":", color="red")
+#    ax2.plot(rbp_posistions,inh_curve_u11, label = "Inh. range on U11", linestyle=":", color="red")
     inh_curve_u22 = [bs.asym_proximity(rbp_p, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_posistions]
-    ax2.plot(rbp_posistions,inh_curve_u22, label = "Inh. range on U22", linestyle=":", color="green")
+#    ax2.plot(rbp_posistions,inh_curve_u22, label = "Inh. range on U22", linestyle=":", color="green")
 #    inh_curve_pos350 = [bs.norm_proximity(rbp_p,350 , rbp_radius, rbp_hill_c) for rbp_p in rbp_posistions]
 #    ax2.plot(rbp_posistions,inh_curve_pos350, label = "Inh. range on 350", linestyle=":", color="orange")
-    ax2.legend()
+    ax2.set_xlabel("RBP pos")
+    ax2.set_ylabel("Value")
+    
+    fig.tight_layout()
+    ax2.legend(loc = (1.1,0))
+    
+    #rates bars plot
+    fig, ax = plt.subplots(figsize=(3.5,2.5))
+    
+    rbp_posss = [100, u1_2_pos-10, u1_2_pos+10]
+    pos_labels = ["default", "RBP before\nExon2 end", "RBP after\nExon2 end"]
+    pars_to_check = ["k2_inh_t","k3_inh_t"]
+    labels = [ "$k2_{inh}$", "$k3_{inh}$"]
+    ks = np.zeros((len(rbp_posss),len(pars_to_check)))
+    for i, pos in enumerate([0, u1_2_pos-10, u1_2_pos+10]):
+        s.set_param("rbp_pos", pos)
+        pars = s._evaluate_pars()
+        for j, p in enumerate(pars_to_check):
+            ks[i, j] = pars[p]        
+        
+    x = np.arange(3)
+    width_total = 0.8
+    width = width_total/len(labels)
+    ax.set_xticks(x)
+    ax.set_xticklabels(pos_labels)
+    for i, p in enumerate(pars_to_check):
+        ax.bar(x-width_total/2 + i*width, ks[:,i], width, align="edge", label=labels[i] )
+    ax.legend()
+    ax.set_title("Parameters modulation by RBP")
+    fig.tight_layout()
     
 if sim_series_vpol:
     vpols = vpol_profile_vpols
@@ -458,7 +512,7 @@ if plot_3d_series_det:
     s.set_runtime(1e5)
     s.set_raster(100001)
     vpols = np.linspace(1,400,100)
-    vpols = np.logspace(0,3,50)
+    vpols = np.logspace(0,3,51)
     rbp_poss = np.linspace(430, 455, 41)
     rbp_poss = np.linspace(100, 600, 101)
     X, Y = np.meshgrid(rbp_poss, np.log10(vpols))
@@ -507,19 +561,22 @@ if plot_3d_series_det:
     ax.set_xticks(indx_x)
     ax.set_yticks(indx_y)
     # ... and label them with the respective list entries.
-    col_labels = [ "%.2f" % v for v in rbp_poss[indx_x]]
+    col_labels = [ "%.0f" % v for v in rbp_poss[indx_x]]
     row_labels = ["%.2f" % v for v  in vpols[indx_y]]
     ax.set_xticklabels(col_labels, fontsize = 10, rotation=60)
     ax.set_yticklabels(row_labels, fontsize = 10)
     ax.set_xlabel("RBP pos")
     ax.set_ylabel("vpol")
     
-    fig, ax  = plt.subplots()
+    fig, ax  = plt.subplots(figsize=(8,4))
     im = ax.imshow(Z)
     cbar = ax.figure.colorbar(im, ax=ax)
     cbar.ax.set_ylabel("PSI", rotation=-90, va="bottom")
     ax.set_xticks(indx_x)
     ax.set_yticks(indx_y)
+    pars = s._evaluate_pars()
+    ax.set_title("k1: %.2f, k2: %.2f, k3: %.2f, rbp_br: %.2f, max. inh: %.3f" % 
+                 (pars["k1_t"], pars["k2_t"], pars["k3_t"], pars["rbp_br_t"], pars["rbp_inh"]))
     # ... and label them with the respective list entries.
 #    col_labels = rbp_poss[indx_x]
 #    row_labels = vpols[indx_y]

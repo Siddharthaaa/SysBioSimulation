@@ -18,7 +18,8 @@ import scipy.stats as st
 
 import time
 import math
-
+import sympy 
+from sympy.parsing.sympy_parser import parse_expr
 import matplotlib
 import matplotlib.colors as colors
 import matplotlib.cm as cm
@@ -115,7 +116,6 @@ class SimParam(SimPlotting, object):
             if not name in self.init_state.keys():
                 self.init_state[name] = 0
         self._is_compiled = False
-#    @nb.jit  # causes performance drops
         
     def add_timeEvent(self, te):
         te.set_constants(self.params)
@@ -180,6 +180,26 @@ class SimParam(SimPlotting, object):
         r.update() # now it stays on the clipboard after the window is closed
         r.destroy()
         return res
+    
+    def get_latex_odes(self, deriv_unit = "t"):
+#        self._transitions[name] = dict(rate=rate_func,
+#                                      actors = reaction)
+        s = "\\begin{align*}\n"
+        spODEs = {}
+        for species in self.init_state.keys():
+            spODEs[species] = ""
+        
+        for key, val in self._transitions.items():
+            for actor, coefs  in val["actors"].items():
+                for c in coefs:
+                    spODEs[actor] += "+" + str(c) + "*" + val["rate"]
+        for actor, eq in spODEs.items():
+            s += sympy.latex(sympy.Eq(sympy.Derivative(actor, deriv_unit),
+                              parse_expr(eq).simplify()),
+                                mul_symbol="dot")  + r"\\" + "\n"
+        s += "\\end{align}\n"      
+        s = re.sub(" = ", " &= ",s)
+        return s
     
     def show_interface(self):
         root = Tk()

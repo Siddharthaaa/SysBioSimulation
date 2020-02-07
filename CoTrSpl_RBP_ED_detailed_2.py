@@ -31,7 +31,7 @@ plot_3d_series_rbp_br_titr = False
 spl_inh= False
 
 
-figure = "Fig 3B5"
+figure = "Fig 3B4"
 
 runtime = 60
 init_mol_count = 1000
@@ -69,7 +69,7 @@ if RON_gene:
     ret_r = 0.001 
     
     rbp_pos = 350
-    rbp_inh = 0.99
+    rbp_inh = 0.999
     rbp_bbr = 1e-9 #basal binding rate
 #    rbp_br = 26*k2 #pol2 associated binding rate
     rbp_br = 10 * k1#pol2 associated binding rate
@@ -88,12 +88,12 @@ if figure == "Fig 3B1": # decreasing
     k1 = 10
     k2 = 5e-2
     k3 = 1e-1
-    rbp_inh = 0.99
+    rbp_inh = 0.999
     sim_series_vpol_ext = True
     
 if figure == "Fig 3B2": # increasing
     sim_series_vpol = True
-    vpol_profile_rbp_pos = 300
+    vpol_profile_rbp_pos = 430
     rbp_inh = 1
     vpol_profile_vpols = np.logspace(0,3,50)
     rbp_br= 1
@@ -104,35 +104,35 @@ if figure == "Fig 3B2": # increasing
         
 if figure == "Fig 3B3": # bell shape
     sim_series_vpol = True
-    vpol_profile_rbp_pos = 300
+    vpol_profile_rbp_pos = 430
     vpol_profile_vpols = np.logspace(0,3.2,50)
-    rbp_br= 0.4
+    rbp_br= 0.3
     rbp_inh = 1
     k1 = 10
-    k2 = 3e-1
-    k3 = 3
+    k2 = 2e-1
+    k3 = 1
     sim_series_vpol_ext = True
     
 if figure == "Fig 3B4": # u-shape
     sim_series_vpol = True
-    vpol_profile_rbp_pos = 300
+    vpol_profile_rbp_pos = 455
     vpol_profile_vpols = np.logspace(0,3,50)
     rbp_br= 2
     k1 = 10
-    k2 = 5e-1
-    k3 = 2e-1
-    rbp_inh = 0.98
+    k2 = 2e-1
+    k3 =2e-2
+    rbp_inh = 1
     sim_series_vpol_ext = True
     
 if figure == "Fig 3B5": # 2 extremes 
     sim_series_vpol = True
-    vpol_profile_rbp_pos = 300
+    vpol_profile_rbp_pos = 455
     vpol_profile_vpols = np.logspace(0,3,50)
-    rbp_br= 1
-    rbp_inh = 0.98
+    rbp_br= 0.5
     k1 = 10
-    k2 = 4e-1
+    k2 = 1e-1
     k3 = 2
+    rbp_inh = 1
     sim_series_vpol_ext = True
     
 if figure == "Fig 3B6": # 2 extremes
@@ -320,6 +320,7 @@ if sim_series_vpol:
     psis_no_rbp = []
     psis_full_rbp = []
     rets = []
+    rets_full = []
     rbp_reacts = []
     _rbp_br = s.params["rbp_br_t"]
     for i, vpol in enumerate(vpols):
@@ -332,7 +333,7 @@ if sim_series_vpol:
         skip = s.get_res_col("Skip", method="ODE")[-1]
         rbp_r = s.get_res_col("TEST_SKIP", method="ODE")[-1]
         rbp_r += s.get_res_col("TEST_INCL", method="ODE")[-1]
-        rbp_reacts.append(rbp_r/(incl + skip))
+        rbp_reacts.append(rbp_r/(incl+skip))
         psi = incl/(incl+skip)
         psis.append(psi)
         ret = s.get_res_col("ret", method="ODE")[-1]
@@ -351,16 +352,19 @@ if sim_series_vpol:
         skip = s.get_res_col("Skip", method="ODE")[-1]
         psi = incl/(incl+skip)
         psis_full_rbp.append(psi)
+        ret = s.get_res_col("ret", method="ODE")[-1]
+        rets_full.append(ret/init_mol_count)
         
         s.set_param("rbp_br_t", _rbp_br)
         
     
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(6,3.5))
     ax.plot(vpols, psis, lw=4, label = "PSI")
     if (sim_series_vpol_ext):
         ax.plot(vpols, psis_no_rbp, lw=2, ls=":", label = "PSI without RBP")
         ax.plot(vpols, psis_full_rbp, lw=2, ls=":", label = "PSI with 100% RBP")
         ax.plot(vpols, rets, lw=1, label="ret %")
+#        ax.plot(vpols, rets_full, lw=1, label="ret %")
         ax.plot(vpols, rbp_reacts, lw=1.5, ls="--", label="share of mRNA + RBP")
     
     ax.set_xlabel("vpol [nt/s]")
@@ -371,6 +375,7 @@ if sim_series_vpol:
         ax.legend()
     else:
         ax.legend(loc = (1.1, 0.2))
+    fig.tight_layout()
     
 
 if plot_3d_series_stoch:
