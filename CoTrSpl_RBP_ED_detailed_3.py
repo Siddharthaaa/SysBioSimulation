@@ -14,6 +14,8 @@ import matplotlib.cm as cm
 from matplotlib import gridspec
 
 import numpy as np
+import sympy as sy
+from sympy.parsing.sympy_parser import parse_expr
 
 
 extended_model = True
@@ -65,11 +67,11 @@ if RON_gene:
     k2_i = 0
     k3_i = 0
     
-    k1_inh = "k1_t * (1-rbp_inh*asym_proximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
-    k2_inh = "k2_t * (1-rbp_inh*asym_proximity(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                   * (1-rbp_inh*asym_proximity(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
-    k3_inh = "k3_t * (1-rbp_inh*asym_proximity(u1_3_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                   * (1-rbp_inh*asym_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k1_inh = "k1_t * (1-rbp_inh*asym_pr(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k2_inh = "k2_t * (1-rbp_inh*asym_pr(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_pr(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k3_inh = "k3_t * (1-rbp_inh*asym_pr(u1_3_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*asym_pr(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
     
     
     spl_r = 2 
@@ -267,6 +269,12 @@ s.add_timeEvent(te3)
 s.add_timeEvent(te4)
 s.add_timeEvent(te5)
 s.add_timeEvent(te6)
+
+
+x, a , l, r, p = sy.symbols("x a l r p")
+f_asym_proximity_sympy = sy.Piecewise(((1/(1+((a-x)/l)**p)), x-a<0), ((1/(1+((x-a)/l)**p)), True))
+#f_asym_proximity_sympy = parse_expr("x+a**(2+p)")
+s.add_function(f_asym_proximity_sympy, (x, a , l, r, p), "asym_pr")
 
 s.compile_system()
 #s.simulate_ODE = True

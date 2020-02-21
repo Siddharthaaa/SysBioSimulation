@@ -65,3 +65,5 @@ class TimeEvent(object):
             self.__t = t
             self.__t_str = None
     t = property(__get_t, __set_t)
+    def get_time_expr(self):
+        return self.__t_str if self.__t_str is not None else self.t

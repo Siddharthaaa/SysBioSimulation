@@ -64,6 +64,7 @@ class SimParam(SimPlotting, object):
         self._clusters ={}
         self._reset_results()
         self._time_events = []
+        self._functions = {}
     def set_param(self, name, value):
         self.params[name] = value
         self._is_compiled = self._dynamic_compile
@@ -142,6 +143,18 @@ class SimParam(SimPlotting, object):
         return self._reacts
     def get_derivation(self, state = None):
         return self.get_reacts(state).transpose().dot(self.get_rates())
+    
+    def add_function(self, sympy_expr, args, name = None, lib = "numpy"):
+        if name is None:
+            name = "f" + len(self._functions)
+        if type(args) is str:
+            args = sympy.symbols(args)
+        self._functions[name] = {}
+        self._functions[name]["sympy_expr"] = sympy_expr
+        self._functions[name]["sympy_args"] = args
+        self._functions[name]["lambda_f"] = sympy.lambdify(args, sympy_expr, lib)
+        
+    
     def set_cluster(self, name, c = ()):
         self._clusters[name]= c
     def get_latex(self):
@@ -218,6 +231,11 @@ class SimParam(SimPlotting, object):
                 add_ns[k] = nb.njit(v)
         globs = globals()
         globs.update(add_ns)
+        globs.update(self._functions)
+        for f_name, f in self._functions.items():
+            globs[f_name] = f["lambda_f"]
+#        f = sy.Function("fff")
+        
                 
         self._constants = np.array(list(self.params.values()))
         #create reaction matrix
@@ -605,21 +623,164 @@ class SimParam(SimPlotting, object):
         
         
     
-    
-
+    def toSBML(self, file = None, level = 3, version = 1):
+        import libsbml as sb
+        def check(value, message):
+           """If 'value' is None, prints an error message constructed using
+           'message' and then exits with status code 1.  If 'value' is an integer,
+           it assumes it is a libSBML return status code.  If the code value is
+           LIBSBML_OPERATION_SUCCESS, returns without further action; if it is not,
+           prints an error message constructed using 'message' along with text from
+           libSBML explaining the meaning of the code, and exits with status code 1.
+           """
+           if value == None:
+             raise SystemExit('LibSBML returned a null value trying to ' + message + '.')
+           elif type(value) is int:
+             if value == sb.LIBSBML_OPERATION_SUCCESS:
+               return
+             else:
+               err_msg = 'Error encountered trying to ' + message + '.' \
+                         + 'LibSBML returned error code ' + str(value) + ': "' \
+                         + sb.OperationReturnValue_toString(value).strip() + '"'
+               raise SystemExit(err_msg)
+           else:
+             return
+        #http://sbml.org/Software/libSBML/5.18.0/docs/python-api/libsbml-python-creating-model.html
+        document = sb.SBMLDocument(level, version) 
+        model = document.createModel()
+        check(model,                              'create model')
+        check(model.setTimeUnits("second"),       'set model-wide time units')
+        check(model.setExtentUnits("item"),       'set model units of extent')
+        check(model.setSubstanceUnits('item'),    'set model substance units')
+#        check(model.setLengthUnits('m'),    'set model length units')
+        #does not work
+#        check(model.setAreaUnits('m^2'),    'set model area units')
+#        check(model.setVolumeUnits('m^3'),    'set model volume units')
         
-
-    
-#@nb.njit#(nb.f8[:](nb.f8[:], nb.f8, nb.f8[:,:], nb.f8[:](nb.f8[:])))        
-#def get_ODE_delta(x,t,reacts, rate_func):
-#   
-#    x_arr= np.zeros(len(x)+1)
-#    x_arr[1:] = x
-#    x_arr[0] = t
-#    rates = rate_func(x_arr)
-#    
-#    dx = reacts.dot(rates)
-#    return dx
+        for f_name, f in self._functions.items():
+            fd = model.createFunctionDefinition()
+            fd.setId(f_name)
+            math_ml = r"<?xml version='1.0' encoding='UTF-8'?>" + "\n"
+#            math_ml = r""
+            math_ml += r"<math xmlns='http://www.w3.org/1998/Math/MathML'>" + "\n"
+            math_ml += "<lambda>\n"
+            for arg in f["sympy_args"]:
+                math_ml+= "\t\t<bvar><ci> " + arg.name + "</ci></bvar>\n"
+            math_ml += sympy.mathml(f["sympy_expr"])
+#            math_ml += "<apply> <plus/> <cn> 1 </cn> <cn> 3 </cn></apply>"
+            math_ml += "\n</lambda>\n"
+            math_ml += r"</math>" + "\n"
+            math_ml = re.sub(r"exprcondpair", "piece", math_ml)
+            print(math_ml)
+            math_ast = sb.readMathMLFromString(math_ml)
+#            check(math_ast, "check the body of function")
+            print(math_ast)
+            fd.setMath(math_ast)
+            
+        
+        per_second = model.createUnitDefinition()
+        check(per_second,                         'create unit definition')
+        check(per_second.setId('per_second'),     'set unit definition id')
+        unit = per_second.createUnit()
+        check(unit,                               'create unit on per_second')
+        check(unit.setKind(sb.UNIT_KIND_SECOND),     'set unit kind')
+        check(unit.setExponent(-1),               'set unit exponent')
+        check(unit.setScale(0),                   'set unit scale')
+        check(unit.setMultiplier(1),              'set unit multiplier')
+        c1 = model.createCompartment()
+        check(c1,                                 'create compartment')
+        check(c1.setId('c1'),                     'set compartment id')
+        check(c1.setConstant(True),               'set compartment "constant"')
+        check(c1.setSize(1),                      'set compartment "size"')
+        check(c1.setSpatialDimensions(3),         'set compartment dimensions')
+        check(c1.setUnits('litre'),               'set compartment size units')
+        
+        for spec, val in self.init_state.items():
+            s1 = model.createSpecies()
+            check(s1,                                 'create species s1')
+            check(s1.setId(spec),                     'set species s1 id')
+            check(s1.setCompartment('c1'),            'set species s1 compartment')
+            check(s1.setConstant(False),              'set "constant" attribute on s1')
+            check(s1.setInitialAmount(val),             'set initial amount for s1')
+            check(s1.setSubstanceUnits('item'),       'set substance units for s1')
+            check(s1.setBoundaryCondition(False),     'set "boundaryCondition" on s1')
+            check(s1.setHasOnlySubstanceUnits(False), 'set "hasOnlySubstanceUnits" on s1')
+        
+        for par, val in self.params.items():
+            k = model.createParameter()
+            check(k,                                  'create parameter k')
+            check(k.setId(par),                       'set parameter k id')
+            check(k.setConstant(False),                'set parameter k "constant"')
+            if type(val) is str:
+                k.setValue(0)
+                ia = model.createInitialAssignment()
+                ia.setSymbol(par)
+                math_ast = sb.parseL3FormulaWithModel(val, model)
+                check(ia.setMath(math_ast), "set initAssig. math")
+                pass
+            else:
+                check(k.setValue(val),                      'set parameter k value')
+            check(k.setUnits('per_second'),           'set parameter k units')
+        
+#        self._transitions[name] = dict(rate=rate_func,
+#                                      actors = reaction)
+        for i, (name, dic) in enumerate(self._transitions.items()):
+             r1 = model.createReaction()
+             check(r1,                                 'create reaction')
+             check(r1.setId("id"+str(i)),                     'set reaction id')
+             check(r1.setReversible(False),            'set reaction reversibility flag')
+             check(r1.setFast(False),                  'set reaction "fast" attribute')
+             for actor, vals in dic["actors"].items():
+                 for val in vals:
+                     if(val < 0): # reactant
+                         species_ref1 = r1.createReactant()
+                         check(species_ref1,                       'create reactant')
+                         check(species_ref1.setSpecies(actor),      'assign reactant species')
+                         check(species_ref1.setConstant(True),     'set "constant" on species ref 1')
+                         check(species_ref1.setStoichiometry(-val),     'set stoichiometry on species ref 1')
+                         
+                     else: #Product
+                         species_ref2 = r1.createProduct()
+                         check(species_ref2,                       'create product')
+                         check(species_ref2.setSpecies(actor),      'assign product species')
+                         check(species_ref2.setConstant(True),     'set "constant" on species ref 2')
+                         check(species_ref2.setStoichiometry(val),     'set stoichiometry on species ref 2')
+             math_ast = sb.parseL3Formula(dic["rate"])
+             check(math_ast,                           'create AST for rate expression')
+ 
+             kinetic_law = r1.createKineticLaw()
+             check(kinetic_law,                        'create kinetic law')
+             check(kinetic_law.setMath(math_ast),      'set math on kinetic law')
+        
+        for te in self._time_events:
+            e = model.createEvent()  
+            e.setUseValuesFromTriggerTime(True)
+            
+            trig = e.createTrigger()
+            trig.setInitialValue(False)
+            trig.setPersistent(True)
+            delay = e.createDelay()
+            trig.setMath(sb.parseL3FormulaWithModel("time >= " + str(te.get_time_expr()), model))
+            delay.setMath(sb.parseL3Formula("0")) 
+            # alternative approach: seems to be worser
+#            delay.setMath(sb.parseL3FormulaWithModel(str(te.get_time_expr()), model))
+#            trig.setMath(sb.parseL3Formula("time >= 0")) 
+            for action in te.action.split(";"):
+                action = action.strip()
+                ea = e.createEventAssignment()
+#                print("AAAAA")
+#                print(action)
+                var, m  = re.split(r"\s*=\s*", action)
+#                print(var, m)
+                ea.setVariable(var)
+                ea.setMath(sb.parseL3FormulaWithModel(m, model))
+        
+        out = sb.writeSBMLToString(document)
+        if file is not None:
+            text_file = open(file, "w")
+            n = text_file.write(out)
+            text_file.close()
+        return out
 
 def get_ODE_delta(x,t,sim):
    

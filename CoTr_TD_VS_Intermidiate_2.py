@@ -307,7 +307,6 @@ s1.add_timeEvent(te4)
 td_sim = s1
 #return  step_sim, td_sim
 
-#TODO
 def psi_analyticaly(vpol, gene_length, l, m1, m2, k, n,ki,ks,kesc, kesc_r):
     avg_tr_time = gene_length/vpol
     kelong = l/avg_tr_time

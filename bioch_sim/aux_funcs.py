@@ -18,6 +18,8 @@ import matplotlib
 from tkinter import Tk 
 import pickle
 import math
+import sympy as sy
+from sympy.functions.elementary.piecewise import Piecewise
 
 
 
@@ -306,6 +308,7 @@ def norm_proximity(x, a , r=1 , p=2):
         return (1/(1+(dist/r)**p))
     else:
         return int(dist<=r)
+
 
 @nb.njit
 def asym_proximity(x, a, l = 2, r=1, p=4):
