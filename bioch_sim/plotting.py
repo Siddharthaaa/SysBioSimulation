@@ -67,7 +67,7 @@ class SimPlotting:
             fig, ax = plt.subplots(1, figsize=(10*scale,10*scale))
         ax2 = None
         if type(products) == str:
-            products = [products]
+            products = products.split(" ")
         indx = np.where((self.raster >= t_bounds[0]) * (self.raster <= t_bounds[1]))[0]
         tt = self.raster[indx]
         #st_res =self.get_result("stochastic")
@@ -129,16 +129,16 @@ class SimPlotting:
         if ax == None:
             fig, ax = plt.subplots(1, figsize=(10*scale,10*scale))
         if type(products) == str:
-            products = [products]
+            products = products.split(" ")
         if len(products) == 0:
             products = list(self.init_state.keys())
             
         print(products)  
         indx = np.where((self.raster >= t_bounds[0]) * (self.raster <= t_bounds[1]))[0]
         tt = self.raster[indx]
-        indices, colors = self._get_indices_and_colors(products)
+        indices, cols = self._get_indices_and_colors(products)
 
-        for index, col, p in zip(indices, colors, products):
+        for index, col, p in zip(indices, cols, products):
             results = self._last_results[:,indx,index]
             mean = np.mean(results, axis = 0)
             ax.plot(tt, results.T, c=col, lw=0.2, alpha=0.5)

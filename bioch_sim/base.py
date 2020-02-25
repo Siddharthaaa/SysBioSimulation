@@ -144,7 +144,7 @@ class SimParam(SimPlotting, object):
     def get_derivation(self, state = None):
         return self.get_reacts(state).transpose().dot(self.get_rates())
     
-    def add_function(self, sympy_expr, args, name = None, lib = "numpy"):
+    def add_function(self, sympy_expr, args, name = None, lib = "sympy"):
         if name is None:
             name = "f" + len(self._functions)
         if type(args) is str:
@@ -234,7 +234,7 @@ class SimParam(SimPlotting, object):
         globs.update(self._functions)
         for f_name, f in self._functions.items():
             globs[f_name] = f["lambda_f"]
-#        f = sy.Function("fff")
+            globs[f_name] = nb.njit(f["lambda_f"])
         
                 
         self._constants = np.array(list(self.params.values()))
@@ -404,6 +404,7 @@ class SimParam(SimPlotting, object):
         for k, v in params.items():
             if(type(v) is str):
                 s = self._sub_vars(v, par_name = "params", dynamic=False)
+#                print(s)
                 params[k] = eval(s)
         return params
     def simulate(self, tr_count=1, stoch=True, ODE = False, ret_raw=False, max_steps = 1e9, verbose = True):
@@ -570,7 +571,7 @@ class SimParam(SimPlotting, object):
             res[i] = f(_s[0], _s, self._constants)
         return res
     
-    def get_res_by_expr_2(self, expr, t_bounds=(0,np.inf)):
+    def get_res_by_expr_2(self, expr, t_bounds=(0,np.inf), series = False):
         
         indx = np.where((self.raster >= t_bounds[0]) * (self.raster <= t_bounds[1]))[0]
         _pre = self.update_pre()
@@ -589,6 +590,10 @@ class SimParam(SimPlotting, object):
         _f = np.vectorize(self._f_tmp, otypes=[np.float], excluded=(1,2,3),
                           signature="(n)->()")
         res = _f(st[indx], _pars, _u_pre, _pre)
+        
+        if series:
+            res = [_f(st[indx], _pars, _u_pre, _pre) for st in self._last_results]
+        
         return res
     
     
@@ -611,15 +616,22 @@ class SimParam(SimPlotting, object):
             index = self.get_res_index(name)
             if(index is not None):
                 indices.append(index)
-        return indices, self.colors
+        indices = np.array(indices)
+        return indices, self.colors[indices-1]
     
     def _get_color(self, name = None):
         if not hasattr(self, "colors"):
             self._get_indices_and_colors()
         return self.colors[self.get_res_index(name)-1]
-    def _set_color(self, name, c):
+    def set_color(self, name, c):
+        self._init_colors()
         i = self.get_res_index(name) -1
         self.colors[i] = colors.to_rgba_array(c)
+    
+    def _init_colors(self,  cmap="gist_ncar"):
+        if not hasattr(self, "colors"):
+            cmap = cm.get_cmap(cmap)
+            self.colors = cmap(np.linspace(0, 1, len(self.init_state)+1))
         
         
     
@@ -666,7 +678,10 @@ class SimParam(SimPlotting, object):
             math_ml += "<lambda>\n"
             for arg in f["sympy_args"]:
                 math_ml+= "\t\t<bvar><ci> " + arg.name + "</ci></bvar>\n"
+                
             math_ml += sympy.mathml(f["sympy_expr"])
+            sympy.print_mathml(f["sympy_expr"])
+#            math_ml += piecewise
 #            math_ml += "<apply> <plus/> <cn> 1 </cn> <cn> 3 </cn></apply>"
             math_ml += "\n</lambda>\n"
             math_ml += r"</math>" + "\n"

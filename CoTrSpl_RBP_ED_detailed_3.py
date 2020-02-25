@@ -228,17 +228,17 @@ if(extended_model):
 #    s.add_reaction("P111*spl_s", {"P111":-1, "Skip": 1}, "skipping")
     
     if spl_inh:
-        s.add_reaction("P111_inh*spl_i * (1-rbp_inh*asym_proximity( u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                       * (1-rbp_inh*asym_proximity(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
-                       * (1-rbp_inh*asym_proximity(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
-                       * (1-rbp_inh*asym_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+        s.add_reaction("P111_inh*spl_i * (1-rbp_inh*asym_pr( u1_1_pos,rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                       * (1-rbp_inh*asym_pr(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
+                       * (1-rbp_inh*asym_pr(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
+                       * (1-rbp_inh*asym_pr(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
                        {"P111_inh":-1, "Incl":1, "TEST_INCL":1}, "inclusion")
         
-        s.add_reaction("P101_inh*spl_s * (1-rbp_inh*asym_proximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                       * (1-rbp_inh*asym_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+        s.add_reaction("P101_inh*spl_s * (1-rbp_inh*asym_pr(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                       * (1-rbp_inh*asym_pr(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
                        {"P101_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
-#        s.add_reaction("P111_inh*spl_s * (1-rbp_inh*asym_proximity(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-#                       * (1-rbp_inh*asym_proximity(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+#        s.add_reaction("P111_inh*spl_s * (1-rbp_inh*asym_pr(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+#                       * (1-rbp_inh*asym_pr(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
 #                       {"P111_inh":-1, "Skip":1, "TEST_SKIP":1}, "skipping")
     else:
         s.add_reaction("P111_inh*spl_i",
@@ -272,9 +272,11 @@ s.add_timeEvent(te6)
 
 
 x, a , l, r, p = sy.symbols("x a l r p")
-f_asym_proximity_sympy = sy.Piecewise(((1/(1+((a-x)/l)**p)), x-a<0), ((1/(1+((x-a)/l)**p)), True))
-#f_asym_proximity_sympy = parse_expr("x+a**(2+p)")
-s.add_function(f_asym_proximity_sympy, (x, a , l, r, p), "asym_pr")
+f_asym_pr_sympy = sy.Piecewise(((1/(1+((a-x)/l)**p)), x-a<0), ((1/(1+((x-a)/r)**p)), True))
+#f_asym_pr_sympy = parse_expr("x+a**(2+p)")
+s.add_function(f_asym_pr_sympy, (x, a , l, r, p), "asym_pr")
+asym_pr = sy.lambdify((x, a , l, r, p), f_asym_pr_sympy )
+
 
 s.compile_system()
 #s.simulate_ODE = True
@@ -282,7 +284,7 @@ s.compile_system()
 #s.plot_course()
 #s.draw_pn(engine="dot", rates=False)
 #s.show_interface()
-inh_curve = 'norm_proximity(t*vpol, rbp_pos, rbp_radius, rbp_hill_c)'
+#inh_curve = 'norm_proximity(t*vpol, rbp_pos, rbp_radius, rbp_hill_c)'
 #s.plot_course(products= [inh_curve])
 
 #ax = s.plot_parameters(parnames=["k1","k2","k3","k1_inh","k2_inh","k3_inh"],
@@ -304,7 +306,7 @@ if (inhibition_plot):
     fig, ax = plt.subplots(figsize=(3,2))
     rbpp = 0
     rbp_poss = np.linspace(-70,100,100)
-    inh_curve_u11 = [bs.asym_proximity(rbp_p, rbpp, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_poss]
+    inh_curve_u11 = [asym_pr(rbp_p, rbpp, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_poss]
     ax.plot(rbp_poss,inh_curve_u11, label = "$InhFunc$", linestyle="-", lw=3)
     ax.axvline(rbpp, ls = "-.")
 #    ax.axvline(u1_2_pos, ls = ":")
@@ -376,9 +378,9 @@ if sim_series_rbp_pos:
     ax2.plot(rbp_posistions, k1, lw =2, c = "blue", alpha=alpha, ls = "-.", label="k1_inh")
     ax2.plot(rbp_posistions, k2, lw =2, c = "red", alpha=alpha, ls = "-.", label="k2_inh")
     ax2.plot(rbp_posistions, k3, lw =2, c = "green", alpha=alpha, ls = "-.", label = "k3_inh")
-    inh_curve_u11 = [bs.asym_proximity(rbp_p, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_posistions]
+    inh_curve_u11 = [asym_pr(rbp_p, u1_1_pos, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_posistions]
 #    ax2.plot(rbp_posistions,inh_curve_u11, label = "Inh. range on U11", linestyle=":", color="red")
-    inh_curve_u22 = [bs.asym_proximity(rbp_p, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_posistions]
+    inh_curve_u22 = [asym_pr(rbp_p, u2_2_pos, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_posistions]
 #    ax2.plot(rbp_posistions,inh_curve_u22, label = "Inh. range on U22", linestyle=":", color="green")
 #    inh_curve_pos350 = [bs.norm_proximity(rbp_p,350 , rbp_radius, rbp_hill_c) for rbp_p in rbp_posistions]
 #    ax2.plot(rbp_posistions,inh_curve_pos350, label = "Inh. range on 350", linestyle=":", color="orange")
