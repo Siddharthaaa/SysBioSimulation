@@ -22,6 +22,8 @@ extended_model = True
 RON_gene = True
 sim_series_rbp_pos = True
 sim_series_rbp_pos_vpol = 50
+sim_series_rbp_pos_add_vpols = [10,200,10000]
+
 
 
 sim_series_vpol = False
@@ -34,12 +36,13 @@ plot_3d_series_stoch = False
 plot_3d_series_det = False
 plot_3d_series_rbp_br_titr = False
 
-inhibition_plot = True
+inhibition_plot = False
 
 spl_inh= False
 
 
-figure = "none"
+figure = "Fig"
+
 
 runtime = 60
 init_mol_count = 1000
@@ -80,6 +83,7 @@ if RON_gene:
     rbp_pos = 480
     rbp_inh = 0.99
     rbp_bbr = 1e-9 #basal binding rate
+#    rbp_bbr = 0.5 #basal binding rate
 #    rbp_br = 26*k2 #pol2 associated binding rate
     rbp_br = 10 * k1#pol2 associated binding rate
     rbp_br = 0.1  #pol2 associated binding rate
@@ -157,7 +161,27 @@ if figure == "Fig 3B6": # 2 extremes
     k3 = 0.4
     sim_series_vpol_ext = True
     
-
+if figure == "Fig 3C":
+    k1 = 0.2
+    k2 = 0.3
+    k3 = 0.4
+    rbp_br = 2
+    ret_r = 0.01
+    rbp_e_up = 30
+    rbp_e_down = 50
+    sim_series_rbp_pos = False
+    
+    
+if figure == "Fig 4C":
+    rbp_e_up = 30
+    rbp_e_down = 40
+    sim_series_rbp_pos = True
+    sim_series_rbp_pos_vpol = 50
+if figure == "Fig 4E":
+    rbp_e_up = 1
+    rbp_e_down = 80
+    sim_series_rbp_pos = True
+    sim_series_rbp_pos_vpol = 50
     
 params = {"vpol": vpol,
         "gene_len": gene_len,
@@ -301,6 +325,9 @@ ax.set_title("vpol: %d, rbp_pos: %d" % (vpol, rbp_pos))
 ax.set_title("vpol: %d, rbp_pos: %d, rbp_range:(%d, %d)" % (vpol, rbp_pos, rbp_e_up, rbp_e_down ))
 
 ax = s.plot_parameters(parnames=["rbp_br"], annotate=True, ax=None, lw=3)
+ax_twin = ax.twinx()
+ax = s.plot_parameters(parnames=["ret_r"], annotate=True, ax=ax_twin, lw=3, c="orange")
+ax_twin.legend(loc="upper right")
 
 if (inhibition_plot):
     fig, ax = plt.subplots(figsize=(3,2))
@@ -352,6 +379,7 @@ if sim_series_rbp_pos:
         ret = s.get_res_col("ret", "ODE")[-1]
         rets.append(ret/init_mol_count)
     
+    
     fig, ax = plt.subplots(figsize=(6,2))
     ax.plot(rbp_posistions, psis, lw=4, label = "PSI")
     ax.axhline(psi_default, lw=2, c ="black", ls="--", label="PSI default")
@@ -369,6 +397,15 @@ if sim_series_rbp_pos:
     ax.axvline(u2_2_pos, label="Splice sites", linestyle="-.", lw =0.7)#, color = "red")
     ax.axhspan(psi_default, np.max(psis), facecolor = "green", alpha = 0.1)
     ax.axhspan(psi_default, 0, facecolor = "red", alpha = 0.1)
+    #additional vpols
+    for vp in sim_series_rbp_pos_add_vpols:
+        s.simulate_ODE = True
+        s.set_param("vpol", vp)
+        ax = s.plot_par_var_1d(par="rbp_pos", vals=rbp_posistions,
+                               label = "vpol: " + str(vp), ax = ax,
+                               plot_args=dict(lw=1, ls="--"),
+                               func=s.get_psi_end, res_type="ODE")
+    
     fig.tight_layout()
     ax.legend(loc = (1.1,0))
     

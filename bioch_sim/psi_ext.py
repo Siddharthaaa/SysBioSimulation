@@ -52,6 +52,13 @@ class SimParam(SimParam):
         self.results["PSI"] = np.array((sim_st_raster[indices,0], psi))
         return indices, psi
     
+    def get_psi_end(self, products = ["Incl", "Skip"], res_type="stoch"):
+        p = products
+        incl = self.get_res_col(p[0], res_type)[-1]
+        skip = self.get_res_col(p[1], res_type)[-1]
+        psi = incl/(incl+skip)
+        return psi
+    
     def get_bimodality(self, name = "PSI", ignore_extremes=False, ignore_fraction=0.1, recognize_threshold=1, with_tendency=False):
         
         settings = (name, ignore_extremes, ignore_fraction, recognize_threshold, with_tendency)

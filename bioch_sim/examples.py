@@ -383,8 +383,8 @@ def get_exmpl_CoTrSpl():
         "rbp_h_c": rbp_h_c,
         "rbp_inh": rbp_inh,
         "pol_dist": pol_dist,
-        "spl_i": spl_r,
-        "spl_s": spl_r*0.5,
+        "k_spl_i": spl_r,
+        "k_spl_s": spl_r,
         "ret_r": 0,
         "ret_r_t": ret_r
         
@@ -414,30 +414,30 @@ def get_exmpl_CoTrSpl():
         s.add_reaction(spec + "*ret_r", {spec:-1, "ret":1}, "retention")
         s.add_reaction(spec_i + "*ret_r", {spec_i:-1, "ret":1}, "retention")
     
-    s.add_reaction("P111*spl_i", {"P111":-1, "Incl": 1}, "inclusion")
-    s.add_reaction("P101*spl_s", {"P101":-1, "Skip": 1}, "skipping")
-#    s.add_reaction("P111*spl_s", {"P111":-1, "Skip": 1}, "skipping")
+    s.add_reaction("P111*k_spl_i", {"P111":-1, "Incl": 1}, "inclusion")
+    s.add_reaction("P101*k_spl_s", {"P101":-1, "Skip": 1}, "skipping")
+#    s.add_reaction("P111*k_spl_s", {"P111":-1, "Skip": 1}, "skipping")
     
     if spl_inh:
-        s.add_reaction("P111_inh*spl_i * (1-rbp_inh*asym_pr(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+        s.add_reaction("P111_inh*k_spl_i * (1-rbp_inh*asym_pr(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
                        * (1-rbp_inh*asym_pr(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
                        * (1-rbp_inh*asym_pr(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
                        * (1-rbp_inh*asym_pr(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
                        {"P111_inh":-1, "Incl":1, "INCLinh":1}, "inclusion")
         
-        s.add_reaction("P101_inh*spl_s * (1-rbp_inh*asym_pr(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+        s.add_reaction("P101_inh*k_spl_s * (1-rbp_inh*asym_pr(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
                        * (1-rbp_inh*asym_pr(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
                        {"P101_inh":-1, "Skip":1, "SkipInh":1}, "skipping")
-#        s.add_reaction("P111_inh*spl_s * (1-rbp_inh*asym_pr(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+#        s.add_reaction("P111_inh*k_spl_s * (1-rbp_inh*asym_pr(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
 #                       * (1-rbp_inh*asym_pr(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
 #                       {"P111_inh":-1, "Skip":1, "SkipInh":1}, "skipping")
     else:
-        s.add_reaction("P111_inh*spl_i",
+        s.add_reaction("P111_inh*k_spl_i",
                        {"P111_inh":-1, "Incl":1, "InclInh":1}, "inclusion")
         
-        s.add_reaction("P101_inh*spl_s",
+        s.add_reaction("P101_inh*k_spl_s",
                        {"P101_inh":-1, "Skip":1, "SkipInh":1}, "skipping")
-#        s.add_reaction("P111_inh*spl_s",
+#        s.add_reaction("P111_inh*k_spl_s",
 #                       {"P111_inh":-1, "Skip":1, "SkipInh":1}, "skipping")
     
     
@@ -461,3 +461,89 @@ def get_exmpl_CoTrSpl():
     s.add_timeEvent(te6)
     
     return s
+
+def get_exmpl_CoTrSpl_simple(vpol=50, tr_len=300, l=8, m1=2, m2=3, k=0, n=2,
+                    ki=0.05, ks=5e-3, kesc=0.5, kesc_r=0):
+    runtime = 100
+    s1 = SimParam("CoTrSpl_general",
+                     runtime, 10001,
+                     dict(vpol = vpol,
+                          l = l,
+                          tr_len = tr_len,
+                          k_elong="vpol*l/tr_len",
+                          ki = ki, ks = ks,
+                          kesc = kesc, kesc_r = kesc_r),
+                     dict(p1=100, Incl = 0, Skip = 0))
+    
+    # upper chain
+    for i in range(1, l):
+        p1 = "p" + str(i)
+        p2 = "p" + str(i+1)
+        s1.add_reaction("k_elong*" + p1, {p1:-1, p2:1} )
+        if i > k:
+            s1.add_reaction("ki *" + p1, {p1:-1, "Incl":1})
+    if k < l:
+        s1.add_reaction("ki *" + p2, {p2:-1, "Incl":1})
+    
+    # lower chain
+    if (m2>0):
+        for i in range(m1+1, l):
+            e1 = "e" + str(i)
+            e2 = "e" + str(i+1)
+            s1.add_reaction("k_elong*" + e1, {e1:-1, e2:1})
+    
+    #escape transitions
+    for i in range(m1, m1+m2):
+        p = "p" + str(i+1)
+        e = "e" + str(i+1)
+        s1.add_reaction("kesc*" + p, {p:-1, e:1})
+        if (kesc_r > 0):
+            s1.add_reaction("kesc_r*" + e, {p:1, e:-1})
+    
+    #last skipping steps
+    for i in range(l-n, l):
+        p = "p" + str(i+1)
+        e = "e" + str(i+1)
+        s1.add_reaction("ks*" + p, {p:-1, "Skip":1})
+        s1.add_reaction("ks*" + e, {e:-1, "Skip":1})
+        
+    
+    s1.compile_system()
+    #s1.draw_pn(engine="dot", rates=False)
+    step_sim = s1
+    
+    
+    s1 = SimParam("CoTrSpl_general_TD",
+                     runtime, 10001,
+                     dict(vpol = vpol,
+                             l = l, tr_len = tr_len,
+                             ki=0, ki_on = ki,
+                          ks = 0, ks_on = ks,
+                          kesc = 0, kesc_on=kesc, kesc_r = kesc_r),
+                     dict(mRNA = 100, Incl = 0, Skip = 0))
+    
+    s1.add_reaction("mRNA*ki", {"Incl":1, "mRNA":-1})
+    s1.add_reaction("mRNA*ks", {"Skip":1, "mRNA":-1})
+    s1.add_reaction("mRNA*kesc", {"mRNAinh":1, "mRNA":-1})
+    if(kesc_r > 0):
+        s1.add_reaction("mRNAinh*kesc_r", {"mRNAinh":-1, "mRNA":1})
+        
+    s1.add_reaction("mRNAinh*ks", {"Skip":1, "mRNAinh":-1})
+    
+    tau1 = "tr_len/l/vpol * %d" % k
+    tau2 = "tr_len/l/vpol * %d" % m1
+    tau3 = "tr_len/l/vpol * %d" % (m1 + m2)
+    tau4 = "tr_len/l/vpol * %d" % (l-n)
+    te1 = TimeEvent(tau1, "ki = ki_on", "Incl. on")
+    te2 = TimeEvent(tau2, "kesc=kesc_on", "Esc. on")
+    te3 = TimeEvent(tau3, "kesc=0; kesc_r = 0", "Esc. off")
+    te4 = TimeEvent(tau4, "ks=ks_on", "Skip. on")
+    s1.add_timeEvent(te1)
+    s1.add_timeEvent(te2)
+    s1.add_timeEvent(te3)
+    s1.add_timeEvent(te4)
+    
+    #s1.draw_pn(engine="dot", rates=False)
+    td_sim = s1
+
+    return dict(step_m = step_sim, td_m = td_sim)

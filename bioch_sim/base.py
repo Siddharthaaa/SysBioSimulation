@@ -98,6 +98,9 @@ class SimParam(SimPlotting, object):
     def set_runtime(self, t):
         self.runtime=t
         self.set_raster(self.raster_count)
+    
+    def get_runtime(self):
+        return self.runtime
         
     def set_state(self, state):
         self._state = state
@@ -306,6 +309,7 @@ class SimParam(SimPlotting, object):
         
         #create rates function
         self._r_s = np.zeros((len(self._rate_funcs),))
+#        func_str= "@nb.njit(\"f4[:](f8[:], f8[:], f8[:], i4[:,:], b1)\")\n"
         func_str= "@nb.njit\n"
 #        func_str= ""
         
@@ -411,21 +415,27 @@ class SimParam(SimPlotting, object):
         if not self._is_compiled:
             self.compile_system(dynamic=True)
         cpu_time = time.time()
+        print("prep time: ", time.time() - cpu_time)
         self._state = list(self.init_state.values())
         self._state.insert(0,0.)
         self._state = np.array(self._state, dtype=np.float64)
         if(verbose and False):
             print("simulate " + self.param_str())
+        print("prep time1: ", time.time() - cpu_time)
         results={}
         tt = self.raster
-        pre = self.update_pre()
-        post = self.update_post()
+#        pre = self.update_pre()
+#        post = self.update_post()
+        pre = np.array(self._curr_pre)
+        post = np.array(self._curr_post)
+        print("prep time: ", time.time() - cpu_time)
 #        print("AAAA:\n", globals())
 #        self._constants = np.array(list(self._evaluate_pars().values()))
         dim = (len(tt),) + self._state.shape
         _last_results = []
         t_events = sorted(self._time_events.copy())
         t_events.append(None)
+        print("prep time: ", time.time() - cpu_time)
         
         if(stoch):
             for i in range(tr_count):
@@ -472,7 +482,10 @@ class SimParam(SimPlotting, object):
                 if verbose:
                     print("Steps: ", steps)
                     print("runtime: ", t)
+#            arr_time = time.time()
             self._last_results = np.array(_last_results)
+#            arr_time = time.time() -arr_time
+#            print("arr convert time: ", arr_time)
     #        if ret_raw:
     #            results["stochastic"] = sim_st
     #        sim_st_raster = rasterize(sim_st, tt)
@@ -486,7 +499,7 @@ class SimParam(SimPlotting, object):
             results["ODE"] = np.hstack((tt.reshape(len(tt),1),sol_deterministic))
         self.results = results
         cpu_time = time.time() - cpu_time
-        if verbose:
+        if True:
             print("runtime: total", cpu_time )
         return results
     
@@ -550,12 +563,18 @@ class SimParam(SimPlotting, object):
         if name in self.results.keys():
             return self.results[name]
         return None
-    def get_res_col(self, name, method = "stoch"):
+    
+    def get_res_col(self, name, method = "stoch", series=False):
        if name not in self.init_state:
            return None
+       index = self.get_res_index(name)
        if method == "stoch":
-           return self.get_result("stoch_rastr")[:, self.get_res_index(name)]
-       return self.get_result("ODE")[:, self.get_res_index(name)]
+           res = self.get_result("stoch_rastr")[:, index]
+       else:
+           res = self.get_result("ODE")[:, index]
+       if series:
+           res = self._last_results[:,:,index]
+       return res
    
     def get_res_by_expr(self, expr, t_bounds=(0,np.inf)):
         
@@ -617,6 +636,7 @@ class SimParam(SimPlotting, object):
             if(index is not None):
                 indices.append(index)
         indices = np.array(indices)
+        print(indices)
         return indices, self.colors[indices-1]
     
     def _get_color(self, name = None):

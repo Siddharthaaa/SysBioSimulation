@@ -127,7 +127,7 @@ class SimPlotting:
     
     def plot_series(self, ax=None, products=[], t_bounds=(0, np.inf), scale=1):
         if ax == None:
-            fig, ax = plt.subplots(1, figsize=(10*scale,10*scale))
+            fig, ax = plt.subplots(1, figsize=(10*scale,5*scale))
         if type(products) == str:
             products = products.split(" ")
         if len(products) == 0:
@@ -144,6 +144,10 @@ class SimPlotting:
             ax.plot(tt, results.T, c=col, lw=0.2, alpha=0.5)
             ax.plot(tt, mean, c = col, lw=3, label = p, alpha=1)
         ax.legend()
+        count = len(self._last_results)
+        ax.set_title(str(count) + " Realizations")
+        ax.set_xlabel("time")
+        ax.set_ylabel("#")
         return ax
     
     def plot_parameters(self, parnames =[], parnames2=[], annotate=True, ax=None, **plotargs):
@@ -191,7 +195,18 @@ class SimPlotting:
             
         return ax
     
-    def plot_par_var_1d(self, par = "s1", vals = [1,2,3,4,5], label = None,
+    def annotate_timeEvents(self, ax = None, offset=20):
+        t_events = sorted(self._time_events.copy())
+        ts = [] #time points
+        ts.append(0)
+        for k, te in enumerate(t_events):
+            if(te.t <= self.runtime):
+                ts.append(te.t)
+                ax.annotate(te.name, (te.t,0),  (-40, -(40+k*offset)),
+                            textcoords = "offset pixels", 
+                            arrowprops={"arrowstyle": "-"})
+    
+    def plot_par_var_1d(self, par = "s1", vals = [1,2,3,4,5], label = None, label_axes=False,
                         ax=None, plot_args = dict(), func=None, **func_pars):
         res = []
         for v in vals:
@@ -202,8 +217,9 @@ class SimPlotting:
             fig, ax = plt.subplots()
         
         ax.plot(vals, res, label = label, **plot_args)
-        ax.set_ylabel(func.__func__.__name__ +   str(func_pars))
-        ax.set_xlabel(par)
+        if(label_axes):
+            ax.set_ylabel(func.__func__.__name__ +   str(func_pars))
+            ax.set_xlabel(par)
         
         return ax
     

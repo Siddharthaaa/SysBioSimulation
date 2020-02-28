@@ -337,3 +337,4 @@ def sin_proximity(x, a, l = 2, r=1, p=1):
         d_norm = math.pi * dist/r if dist <= r else 0
         
     return math.sin(d_norm)
+

@@ -26,9 +26,9 @@ import numpy as np
 
 # 7: branched early inh bell few steps
 # 8: branched early inh bell many steps
-model_id = 1
+model_id = 8
 
-sims_count = 10
+sims_count = 200
 
 #gene_length = 800 #nt
 trscrpt_start = 700 #nt site of U1 of exon2
@@ -230,7 +230,7 @@ s1 = bs.SimParam("CoTrSpl_general",
                  dict(vpol = vpol,
                       l = l,
                       tr_len = tr_len,
-                      k_elong="vpol*l/tr_len",
+                      k_elong="vpol*(l-1)/tr_len",
                       ki = ki, ks = ks,
                       kesc = kesc, kesc_r = kesc_r),
                  dict(p1=init_mol_count, Incl = 0, Skip = 0))
@@ -246,7 +246,7 @@ if k < l:
     s1.add_reaction("ki *" + p2, {p2:-1, "Incl":1})
 
 # lower chain
-if (m1>m2):
+if (m2>0):
     for i in range(m1+1, l):
         e1 = "e" + str(i)
         e2 = "e" + str(i+1)
@@ -380,7 +380,7 @@ if deterministic_solution:
         psis_det_td[j] = incl/(incl+skip)
         
     #    ax.plot(vpols, psis_all2.T, lw=0.1, alpha=1, color="grey", antialiased=True)
-#    ax.plot(vpols, psis_det_step, lw=3, color="red", label= "step model" )
+    ax.plot(vpols, psis_det_step, lw=3, color="red", label= "step model" )
     ax.plot(vpols, psis_det_td, lw=4, color="green", label="time delay model")
     
     ax.plot(vpols_analyt, psis_analyt, "bo",ms=8,  label="analytic solution")
