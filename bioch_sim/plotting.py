@@ -209,17 +209,22 @@ class SimPlotting:
     def plot_par_var_1d(self, par = "s1", vals = [1,2,3,4,5], label = None, label_axes=False,
                         ax=None, plot_args = dict(), func=None, **func_pars):
         res = []
+        last_results = []
         for v in vals:
             self.set_param(par, v)
             self.simulate()
-            res.append(func(**func_pars))
+            last_results.append(self._last_results[0])
+            if func is not None:
+                res.append(func(**func_pars))
+        self._last_results = np.array(last_results)
         if ax is None:
             fig, ax = plt.subplots()
         
-        ax.plot(vals, res, label = label, **plot_args)
-        if(label_axes):
-            ax.set_ylabel(func.__func__.__name__ +   str(func_pars))
-            ax.set_xlabel(par)
+        if (len(res) > 0):
+            ax.plot(vals, res, label = label, **plot_args)
+            if(label_axes):
+                ax.set_ylabel(func.__func__.__name__ +   str(func_pars))
+                ax.set_xlabel(par)
         
         return ax
     

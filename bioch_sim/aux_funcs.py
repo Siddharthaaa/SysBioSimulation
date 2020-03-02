@@ -338,3 +338,9 @@ def sin_proximity(x, a, l = 2, r=1, p=1):
         
     return math.sin(d_norm)
 
+def get_logNorm_rn(loc = 100, cv = 0.3, size=1000):
+    
+    sigma = np.sqrt(np.log(cv**2+1))
+    mu_std = np.log(loc) - (sigma**2)/2
+    nums = st.lognorm.rvs(sigma, 0, scale=np.exp(mu_std), size=size)
+    return nums

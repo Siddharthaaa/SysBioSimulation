@@ -411,31 +411,26 @@ class SimParam(SimPlotting, object):
 #                print(s)
                 params[k] = eval(s)
         return params
-    def simulate(self, tr_count=1, stoch=True, ODE = False, ret_raw=False, max_steps = 1e9, verbose = True):
+    def simulate(self, tr_count=1, stoch=True, ODE = False, max_steps = 1e9, verbose = True):
         if not self._is_compiled:
             self.compile_system(dynamic=True)
         cpu_time = time.time()
-        print("prep time: ", time.time() - cpu_time)
         self._state = list(self.init_state.values())
         self._state.insert(0,0.)
         self._state = np.array(self._state, dtype=np.float64)
         if(verbose and False):
             print("simulate " + self.param_str())
-        print("prep time1: ", time.time() - cpu_time)
         results={}
         tt = self.raster
 #        pre = self.update_pre()
 #        post = self.update_post()
         pre = np.array(self._curr_pre)
         post = np.array(self._curr_post)
-        print("prep time: ", time.time() - cpu_time)
-#        print("AAAA:\n", globals())
 #        self._constants = np.array(list(self._evaluate_pars().values()))
         dim = (len(tt),) + self._state.shape
         _last_results = []
         t_events = sorted(self._time_events.copy())
         t_events.append(None)
-        print("prep time: ", time.time() - cpu_time)
         
         if(stoch):
             for i in range(tr_count):
