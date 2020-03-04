@@ -8,6 +8,7 @@ Created on Wed Dec 11 14:33:10 2019
 
 from . import SimParam, TimeEvent
 import sympy as sy
+import numpy as np
 
 def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
     s = None
@@ -512,7 +513,6 @@ def get_exmpl_CoTrSpl_simple(vpol=50, tr_len=300, l=8, m1=2, m2=3, k=0, n=2,
     #s1.draw_pn(engine="dot", rates=False)
     step_sim = s1
     
-    
     s1 = SimParam("CoTrSpl_general_TD",
                      runtime, 10001,
                      dict(vpol = vpol,
@@ -545,5 +545,41 @@ def get_exmpl_CoTrSpl_simple(vpol=50, tr_len=300, l=8, m1=2, m2=3, k=0, n=2,
     
     #s1.draw_pn(engine="dot", rates=False)
     td_sim = s1
+    
+    def psi_analyticaly(vpol):
+        avg_tr_time = tr_len/vpol
+        kelong = l/avg_tr_time
+        t_per_step = 1/kelong
+        taus =[]
+        taus.append(t_per_step * k)
+        taus.append(t_per_step * m1)
+        taus.append(t_per_step * (m1 + m2))
+        taus.append(t_per_step * (l-n))
+        taus.append(np.inf)
+        indx = np.argsort(taus)
+        p=1
+        pi = 0
+        ki_b = ks_b = kesc_b = 0
+        t = 0
+        for i in indx:
+            tau = taus[i]
+            td = tau-t
+            t = tau
+            A = td*(ki_b + ks_b + kesc_b)
+            pt = p*(1-np.exp(-A))
+            p -= pt
+            ksum = (ki_b + ks_b + kesc_b)
+            pi += pt*ki_b/ksum if ksum >0 else 0   
+            if(i == 0):
+                ki_b = ki
+            elif(i == 1):
+                #TODO does not work proper if desc_r  > 0
+                kesc_b = kesc*(kesc/(kesc+kesc_r)) if kesc >0 else 0
+            elif(i ==2):
+                kesc_b = 0
+            elif(i==3):
+                ks_b = ks
+        return pi
 
-    return dict(step_m = step_sim, td_m = td_sim)
+
+    return dict(step_m = step_sim, td_m = td_sim, psi_analytic_f = psi_analyticaly)

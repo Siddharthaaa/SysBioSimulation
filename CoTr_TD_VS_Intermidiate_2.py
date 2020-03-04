@@ -26,7 +26,7 @@ import numpy as np
 
 # 7: branched early inh bell few steps
 # 8: branched early inh bell many steps
-model_id = 8
+model_id = 1
 
 sims_count = 200
 
