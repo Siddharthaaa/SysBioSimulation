@@ -24,7 +24,7 @@ init_mol_count = 100
 fig = "5A"
 
 if fig == "5A":
-    s = bs.get_exmpl_CoTrSpl()
+    s = bs.coTrSplMechanistic()
     init_sp = "P000"
     s.set_color("P100", "magenta")
     s.set_color("P000_inh", "orange")
@@ -33,7 +33,7 @@ if fig == "5A":
     runtime = 25
 
 if fig == "5B":
-    s = bs.get_exmpl_CoTrSpl_simple()["td_m"]
+    s = bs.coTrSplMechanistic_simple()["td_m"]
     init_sp = "mRNAinh"
     s.set_color("mRNAinh", "orange")
     prod_to_show = []

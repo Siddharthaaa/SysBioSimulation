@@ -14,7 +14,7 @@ import support_th as sth
 import numpy as np
 
 #settings 
-steps_multiplier = 20
+steps_multiplier = 2
 
 l = 8
 l_many = l * steps_multiplier
@@ -53,14 +53,14 @@ else:
     figsize=(3.7, 5.2)
     leg_loc = "best"
 
-models = bs.get_exmpl_CoTrSpl_simple(50, tr_len=tr_len, l=l, m1=0, m2=0, k=0, n=n,
+models = bs.coTrSplCommitment(50, tr_len=tr_len, l=l, m1=0, m2=0, k=0, n=n,
                     ki=ki, ks=ks, kesc=kesc, kesc_r=0)
 
 step_m = models["step_m"]
 td_m = models["td_m"]
 psi_f = models["psi_analytic_f"]
 
-models = bs.get_exmpl_CoTrSpl_simple(50, tr_len=tr_len, l=l_many, m1=0, m2=0, k=0, n=n_many,
+models = bs.coTrSplCommitment(50, tr_len=tr_len, l=l_many, m1=0, m2=0, k=0, n=n_many,
                    ki=ki, ks=ks, kesc=kesc, kesc_r=0)
 many_step_m = models["step_m"]
 
@@ -122,5 +122,5 @@ ax = td_m.plot_parameters(parnames = "ki", ax=ax, annotate=False, c="green", lw=
 ax = td_m.plot_parameters(parnames = "ks", ax=ax, annotate=False, c="red", lw=3, ls="--")
 ax.set_xlabel("time")
 #ax.set_ylabel("value")
-ax.set_title("Parameters (TD model)")
+ax.set_title("Parameters (vpol=%.1f)" % td_m.params["vpol"])
 [fig.tight_layout() for i in  range(3)]

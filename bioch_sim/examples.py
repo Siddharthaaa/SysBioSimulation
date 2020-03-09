@@ -303,7 +303,7 @@ def get_exmpl_sim(name = ("basic", "LotkaVolterra", "hill_fb")):
         
     return s
 
-def get_exmpl_CoTrSpl():
+def coTrSplMechanistic():
     
     spl_inh = False
     
@@ -463,7 +463,7 @@ def get_exmpl_CoTrSpl():
     
     return s
 
-def get_exmpl_CoTrSpl_simple(vpol=50, tr_len=300, l=8, m1=2, m2=3, k=0, n=2,
+def coTrSplCommitment(vpol=50, tr_len=300, l=8, m1=2, m2=3, k=0, n=2,
                     ki=0.05, ks=5e-3, kesc=0.5, kesc_r=0):
     runtime = 100
     s1 = SimParam("CoTrSpl_general",

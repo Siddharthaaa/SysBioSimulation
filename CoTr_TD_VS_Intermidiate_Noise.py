@@ -14,7 +14,7 @@ from scipy.stats import binom
 
 import numpy as np
 
-sims_count = 5000
+sims_count = 100
 
 gene_length = 800 #nt
 trscrpt_start = 700 #nt
@@ -186,126 +186,14 @@ def get_models(model_id="test", vpol = 50, runtime=1e4):
         
     
     
-    s1 = bs.SimParam("CoTrSpl_general",
-                     runtime, 10001,
-                     dict(vpol = vpol,
-                          l = l,
-                          tr_len = tr_len,
-                          k_elong="vpol*l/tr_len",
-                          ki = ki, ks = ks,
-                          kesc = kesc, kesc_r = kesc_r),
-                     dict(p1=init_mol_count, Incl = 0, Skip = 0))
-    
-    # upper chain
-    for i in range(1, l):
-        p1 = "p" + str(i)
-        p2 = "p" + str(i+1)
-        s1.add_reaction("k_elong*" + p1, {p1:-1, p2:1} )
-        if i > k:
-            s1.add_reaction("ki *" + p1, {p1:-1, "Incl":1})
-    if k < l:
-        s1.add_reaction("ki *" + p2, {p2:-1, "Incl":1})
-    
-    # lower chain
-    if (m1>m2):
-        for i in range(m1+1, l):
-            e1 = "e" + str(i)
-            e2 = "e" + str(i+1)
-            s1.add_reaction("k_elong*" + e1, {e1:-1, e2:1})
-    
-    #escape transitions
-    for i in range(m1, m1+m2):
-        p = "p" + str(i+1)
-        e = "e" + str(i+1)
-        s1.add_reaction("kesc*" + p, {p:-1, e:1})
-        if (kesc_r > 0):
-            s1.add_reaction("kesc_r*" + e, {p:1, e:-1})
-    
-    #last skipping steps
-    for i in range(l-n, l):
-        p = "p" + str(i+1)
-        e = "e" + str(i+1)
-        s1.add_reaction("ks*" + p, {p:-1, "Skip":1})
-        s1.add_reaction("ks*" + e, {e:-1, "Skip":1})
-        
-    
-    s1.compile_system()
-    #s1.draw_pn(engine="dot", rates=False)
-    step_sim = s1
-    
-    
-    s1 = bs.SimParam("CoTrSpl_general_TD",
-                     runtime, 10001,
-                     dict(vpol = vpol,
-                             l = l, tr_len = tr_len,
-                             ki=0, ki_on = ki,
-                          ks = 0, ks_on = ks,
-                          kesc = 0, kesc_on=kesc, kesc_r = kesc_r),
-                     dict(mRNA = init_mol_count, Incl = 0, Skip = 0))
-    
-    s1.add_reaction("mRNA*ki", {"Incl":1, "mRNA":-1})
-    s1.add_reaction("mRNA*ks", {"Skip":1, "mRNA":-1})
-    s1.add_reaction("mRNA*kesc", {"mRNAbr":1, "mRNA":-1})
-    if(kesc_r > 0):
-        s1.add_reaction("mRNAbr*kesc_r", {"mRNAbr":-1, "mRNA":1})
-        
-    s1.add_reaction("mRNAbr*ks", {"Skip":1, "mRNAbr":-1})
-    
-    tau1 = "tr_len/l/vpol * %d" % k
-    tau2 = "tr_len/l/vpol * %d" % m1
-    tau3 = "tr_len/l/vpol * %d" % (m1 + m2)
-    tau4 = "tr_len/l/vpol * %d" % (l-n)
-    te1 = bs.TimeEvent(tau1, "ki = ki_on", "Incl. on")
-    te2 = bs.TimeEvent(tau2, "kesc=kesc_on", "Esc. on")
-    te3 = bs.TimeEvent(tau3, "kesc=0; kesc_r = 0", "Esc. off")
-    te4 = bs.TimeEvent(tau4, "ks=ks_on", "Skip. on")
-    s1.add_timeEvent(te1)
-    s1.add_timeEvent(te2)
-    s1.add_timeEvent(te3)
-    s1.add_timeEvent(te4)
-    
-    #s1.draw_pn(engine="dot", rates=False)
-    td_sim = s1
+    models = bs.coTrSplCommitment(vpol=vpol, tr_len=tr_len, l=l, m1=m1, m2=m2, k=k, n=n,
+                    ki=ki, ks=ks, kesc=kesc, kesc_r=0)
+    td_sim = models["td_m"]
+    step_sim = models["step_m"]
+    td_sim = models["td_m"]
+    psi_f = models["psi_analytic_f"]
+    return step_sim, td_sim, psi_f
 
-    return step_sim, td_sim
-
-#TODO
-def psi_analyticaly(vpol, gene_length, l, m1, m2, k, n,ki,ks,kesc, kesc_r):
-    avg_tr_time = gene_length/vpol
-    kelong = l/avg_tr_time
-    t_per_step = 1/kelong
-    taus =[]
-    taus.append(t_per_step * k)
-    taus.append(t_per_step * m1)
-    taus.append(t_per_step * (m1 + m2))
-    taus.append(t_per_step * (l-n))
-    taus.append(np.inf)
-    indx = np.argsort(taus)
-    p=1
-    pi = 0
-    ki_b = ks_b = kesc_b = 0
-    t = 0
-    for i in indx:
-        tau = taus[i]
-        td = tau-t
-        t = tau
-        A = td*(ki_b + ks_b + kesc_b)
-        pt = p*(1-np.exp(-A))
-        p -= pt
-        ksum = (ki_b + ks_b + kesc_b)
-        pi += pt*ki_b/ksum if ksum >0 else 0   
-        if(i == 0):
-            ki_b = ki
-        elif(i == 1):
-            #TODO desc_r does not function proper
-            kesc_b = kesc*(kesc/(kesc+kesc_r)) if kesc >0 else 0
-        elif(i ==2):
-            kesc_b = 0
-        elif(i==3):
-            ks_b = ks
-    
-    
-    return pi
 #
 #psi_inter =ki/(ki+ kesc)
 ##psi_inter =ki/(ki+kesc)
