@@ -524,7 +524,7 @@ def coTrSplCommitment(vpol=50, tr_len=300, l=8, m1=2, m2=3, k=0, n=2,
     
     s1.add_reaction("mRNA*ki", {"Incl":1, "mRNA":-1})
     s1.add_reaction("mRNA*ks", {"Skip":1, "mRNA":-1})
-    s1.add_reaction("mRNA*kesc", {"mRNAinh":1, "mRNA":-1})
+    s1.add_reaction("mRNA*kesc", {"mRNAinh":1, "mRNA":-1, "ESC":1})
     if(kesc_r > 0):
         s1.add_reaction("mRNAinh*kesc_r", {"mRNAinh":-1, "mRNA":1})
         

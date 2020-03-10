@@ -41,7 +41,7 @@ inhibition_plot = False
 spl_inh= False
 
 
-figure = "Fig"
+figure = "Fig 3B2"
 
 
 runtime = 60
@@ -97,6 +97,7 @@ if RON_gene:
     pol_dist = 20 # max nt's after pol can bring somth. to nascRNA
     
 if figure == "Fig 3B1": # decreasing
+    sim_series_vpol = True
     vpol_profile_rbp_pos = 50
     vpol_profile_vpols = np.logspace(0,3,50)
     rbp_br= 5
@@ -314,8 +315,9 @@ s.compile_system()
 #ax = s.plot_parameters(parnames=["k1","k2","k3","k1_inh","k2_inh","k3_inh"],
 #                  parnames2=["rbp_br"])
 
-fig, axs = plt.subplots(2)
-ax = s.plot_parameters(parnames=["k1","k2","k3"], annotate=False, ax = None, lw=3)
+#fig, axs = plt.subplots(2)
+fig, ax = plt.subplots(figsize=(7,2))
+ax = s.plot_parameters(parnames=["k1","k2","k3"], annotate=False, ax = ax, lw=3)
 ax = s.plot_parameters(parnames=["k1_inh","k2_inh","k3_inh"], annotate=False,
                        ax=ax, lw=6, ls=(0,(1,3))
                        ,dash_capstyle="round"
@@ -323,11 +325,20 @@ ax = s.plot_parameters(parnames=["k1_inh","k2_inh","k3_inh"], annotate=False,
         )
 ax.set_title("vpol: %d, rbp_pos: %d" % (vpol, rbp_pos))
 ax.set_title("vpol: %d, rbp_pos: %d, rbp_range:(%d, %d)" % (vpol, rbp_pos, rbp_e_up, rbp_e_down ))
+ax.set_ylabel("Exon def. rates")
+ax.set_xlabel("time")
+ax.legend(fontsize=9)
+fig.tight_layout()
 
-ax = s.plot_parameters(parnames=["rbp_br"], annotate=True, ax=None, lw=3)
+fig, ax = plt.subplots(figsize=(7,1.5))
+ax = s.plot_parameters(parnames=["rbp_br"], annotate=False, ax=ax, lw=3)
+ax.set_ylabel("RBP binding rate")
+ax.set_xlabel("time")
 ax_twin = ax.twinx()
-ax = s.plot_parameters(parnames=["ret_r"], annotate=True, ax=ax_twin, lw=3, c="orange")
+ax_twin = s.plot_parameters(parnames=["ret_r"], annotate=False, ax=ax_twin, lw=3, c="orange")
 ax_twin.legend(loc="upper right")
+ax_twin.set_ylabel("Intron ret. rate")
+fig.tight_layout()
 
 if (inhibition_plot):
     fig, ax = plt.subplots(figsize=(3,2))
