@@ -175,7 +175,7 @@ for m_i, model in enumerate(models):
     
     td_m.set_param("vpol", 50)
     td_m.set_runtime(6)
-    fig, ax = plt.subplots( figsize=(5,2))
+    fig, ax = plt.subplots(figsize=(5,2))
     ax = td_m.plot_parameters(parnames = "ki", ax=ax, annotate=False, c="green", lw=3, ls="--")
     ax = td_m.plot_parameters(parnames = "ks", ax=ax, annotate=False, c="red", lw=3, ls="--")
     ax = td_m.plot_parameters(parnames = "kesc", ax=ax, annotate=False, c="blue", lw=3, ls="--")

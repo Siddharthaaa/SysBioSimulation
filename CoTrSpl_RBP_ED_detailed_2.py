@@ -31,7 +31,7 @@ plot_3d_series_rbp_br_titr = False
 spl_inh= False
 
 
-figure = "Fig 3B4"
+figure = "Fig 3B6"
 
 runtime = 60
 init_mol_count = 1000

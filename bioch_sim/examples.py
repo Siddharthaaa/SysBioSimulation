@@ -424,7 +424,7 @@ def coTrSplMechanistic():
                        * (1-rbp_inh*asym_pr(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
                        * (1-rbp_inh*asym_pr(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
                        * (1-rbp_inh*asym_pr(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
-                       {"P111_inh":-1, "Incl":1, "INCLinh":1}, "inclusion")
+                       {"P111_inh":-1, "Incl":1, "InclInh":1}, "inclusion")
         
         s.add_reaction("P101_inh*k_spl_s * (1-rbp_inh*asym_pr(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
                        * (1-rbp_inh*asym_pr(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
