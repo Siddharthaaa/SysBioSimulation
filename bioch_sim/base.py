@@ -157,7 +157,11 @@ class SimParam(SimPlotting, object):
         self._functions[name]["sympy_args"] = args
         self._functions[name]["lambda_f"] = sympy.lambdify(args, sympy_expr, lib)
         
-    
+    def get_function(self, name = None):
+        if name == None:
+            return self._functions.keys()
+        else:
+            return self._functions[name]
     def set_cluster(self, name, c = ()):
         self._clusters[name]= c
     def get_latex(self):
@@ -225,8 +229,9 @@ class SimParam(SimPlotting, object):
         app = SimInterface(self)
         root.mainloop()
         
-    
-    def compile_system(self, dynamic = True, add_ns={}, check_pre=True):
+    def compile_system(self, **kwargs):
+        return self.compile(**kwargs)
+    def compile(self, dynamic = True, add_ns={}, check_pre=True):
         add_ns = add_ns.copy()
         #convert function to jitted funcitons
         for k, v in add_ns.items():
@@ -366,7 +371,6 @@ class SimParam(SimPlotting, object):
         print(s)
         exec(s)
         
-    
     def _sub_vars(self, s, par_name="pars", place_name = "st", dynamic = True):
         for i, name in enumerate(self.params.keys()):
             if(dynamic):

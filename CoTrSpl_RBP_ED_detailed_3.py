@@ -20,7 +20,7 @@ from sympy.parsing.sympy_parser import parse_expr
 
 extended_model = True
 RON_gene = True
-sim_series_rbp_pos = True
+sim_series_rbp_pos = False
 sim_series_rbp_pos_vpol = 50
 sim_series_rbp_pos_add_vpols = [10,200,10000]
 
@@ -41,7 +41,7 @@ inhibition_plot = False
 spl_inh= False
 
 
-figure = "Fig 3B2"
+figure = "Fig ..."
 
 
 runtime = 60
