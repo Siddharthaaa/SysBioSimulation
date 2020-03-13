@@ -17,14 +17,25 @@ import numpy as np
 import sympy as sy
 
 
+skewed_RBP_effect = True
+
 sim_series_rbp_pos = True
 sim_series_rbp_pos_vpol = 50
+if skewed_RBP_effect:
+    rbp_upstream_radius = 1
+    rbp_downstream_radius = 80
+    rbp_inh_title = "Right-skewed RBP effect"
+else:
+    rbp_upstream_radius = 30
+    rbp_downstream_radius = 40
+    rbp_inh_title = "Bidirectional  RBP effect"
 sim_series_rbp_pos_add_vpols = [10, 50, 200, 10000]
 rbp_posistions = np.linspace(100, 600, 101)
 
-plot_psi_landscape = False
+figsize=(8,4.5)
 
-s = bs.coTrSplMechanistic()
+plot_psi_landscape = False
+inhibition_plot_inside = False
 
 pars = dict(vpol=50,
             rbp_pos = 480,
@@ -33,7 +44,14 @@ pars = dict(vpol=50,
             k1_t = 1,
             k2_t = 0.1,
             k3_t = 1,
-            ret_t = 1e-3 )
+            ret_t = 1e-3,
+            rbp_e_up = rbp_upstream_radius,
+            rbp_e_down = rbp_downstream_radius
+            )
+
+
+s = bs.coTrSplMechanistic()
+
 s.params.update(pars)
 s.compile()
 pars = s._evaluate_pars()
@@ -48,8 +66,9 @@ u2_2_pos = pars["u2_2_pos"]
 rbp_inh = pars["rbp_inh"]
 
 
+
 if sim_series_rbp_pos:
-    fig = plt.figure(figsize=(10,5))
+    fig = plt.figure(figsize=figsize)
     ax1 = plt.subplot2grid((3,3), (0,0), colspan=2, rowspan=1, fig=fig)
     ax1_leg = plt.subplot2grid((3,3), (0,2), colspan=1, rowspan=1, fig=fig)
     ax1_leg.axis("off")
@@ -57,15 +76,16 @@ if sim_series_rbp_pos:
     
     ax2 = plt.subplot2grid((3,3), (1,0), colspan=2, rowspan=1, fig=fig, sharex=ax1)
     ax2_leg = plt.subplot2grid((3,3), (1,2), colspan=1, rowspan=1, fig=fig)
-    ax2_leg.axis("off")
+    if not inhibition_plot_inside:
+        ax2_leg.axis("off")
 #    ax2.set_xticklabels([])
     
     ax3 = plt.subplot2grid((3,3), (2,0), colspan=2, rowspan=1, fig=fig, sharex=ax1)
     ax3_leg = plt.subplot2grid((3,3), (2,2), colspan=1, rowspan=1, fig=fig)
     ax3_leg.axis("off")
-    ax3.set_xlabel("RBP pos")
+    ax3.set_xlabel("RBP position")
     
-    s.set_runtime(1e5)
+    s.set_runtime(1e4)
     s.set_raster(30001)
     s.set_param("vpol", sim_series_rbp_pos_vpol)
     psis = []
@@ -107,12 +127,13 @@ if sim_series_rbp_pos:
                                    label="PSI default"))
     leg1_handels.append(ax.plot(rbp_posistions, rets, lw=1, label="% retention")[0])
    
-#    ax.set_xlabel("RBP pos")
+#    ax.set_xlabel("RBP position")
     ax.set_ylabel("PSI")
-    ax.set_title("u11: %d; u21: %d; u12: %d; u22: %d; Radius:(%d, %d)" % 
-                 (u1_1_pos, u2_1_pos, u1_2_pos, u2_2_pos, rbp_e_up, rbp_e_down))
-    ax.set_title("vpol: %d, max. inh.: %.2f; RBP radius:(%d, %d)" % 
-                 (sim_series_rbp_pos_vpol, rbp_inh, rbp_e_up, rbp_e_down))
+#    ax.set_title("u11: %d; u21: %d; u12: %d; u22: %d; Radius:(%d, %d)" % 
+#                 (u1_1_pos, u2_1_pos, u1_2_pos, u2_2_pos, rbp_e_up, rbp_e_down))
+#    ax.set_title("vpol: %d, max. inh.: %.2f; RBP radius:(%d, %d)" % 
+#                 (sim_series_rbp_pos_vpol, rbp_inh, rbp_e_up, rbp_e_down))
+    ax.set_title("RBP postion-PSI profiles")
     ax.axvline(u1_1_pos, linestyle="-.",lw =0.7)#, color = "red")
     ax.axvline(u2_1_pos, linestyle="-.",lw =0.7)#, color = "red")
     ax.axvline(u1_2_pos, linestyle="-.", lw =0.7)#, color = "red")
@@ -129,8 +150,8 @@ if sim_series_rbp_pos:
                                plot_args=dict(lw=2, ls="-"),
                                func=s.get_psi_end, res_type="ODE")
     
-    fig.tight_layout()
-    ax3_leg.legend(handles = ax3.get_children()[0:3], loc = "lower left")
+    ax3_leg.legend(handles = ax3.get_children()[0:4], loc = "lower left")
+    ax3.set_ylabel("PSI")
     
 #    ax2 = ax.twinx()
 #    fig, ax2 = plt.subplots(figsize=(6,1.5))
@@ -138,11 +159,16 @@ if sim_series_rbp_pos:
     ax2.plot(rbp_posistions, k1, lw =2, c = "blue", alpha=alpha, ls = "-.", label="k1_inh")
     ax2.plot(rbp_posistions, k2, lw =2, c = "red", alpha=alpha, ls = "-.", label="k2_inh")
     ax2.plot(rbp_posistions, k3, lw =2, c = "green", alpha=alpha, ls = "-.", label = "k3_inh")
-#    ax2.set_xlabel("RBP pos")
+#    ax2.set_xlabel("RBP position")
     ax2.set_ylabel("ki_inh")
     
+    ax1.tick_params(labelbottom=False)    
+    ax2.tick_params(labelbottom=False)    
     fig.tight_layout()
-    ax2_leg.legend(handles = ax2.get_children()[0:3], loc = "lower left")
+    if not inhibition_plot_inside:
+        ax2_leg.legend(handles = ax2.get_children()[0:3], loc = "lower left")
+    else:
+        ax2.legend(loc = "best")
     
 if plot_psi_landscape:
 
@@ -179,7 +205,7 @@ if plot_psi_landscape:
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     ax.plot_surface(X,Y,Z,  cmap=cm.coolwarm)
-    ax.set_xlabel("RBP pos")
+    ax.set_xlabel("RBP position")
     ax.set_ylabel("log10 (vpol [nt/s])")    
     ax.set_zlabel("PSI")
 #    ax.set_yscale("log")
@@ -188,7 +214,7 @@ if plot_psi_landscape:
     #heatmaps 
     step = 5
     indx_x = np.arange(0, len(rbp_poss)-1, step)
-    indx_y = np.arange(0, len(vpols)-1, step)
+    indx_y = np.arange(0, len(vpols), step)
     
     fig, ax  = plt.subplots()
     im = ax.imshow(rets)
@@ -201,7 +227,7 @@ if plot_psi_landscape:
     row_labels = ["%.2f" % v for v  in vpols[indx_y]]
     ax.set_xticklabels(col_labels, fontsize = 10, rotation=60)
     ax.set_yticklabels(row_labels, fontsize = 10)
-    ax.set_xlabel("RBP pos")
+    ax.set_xlabel("RBP position")
     ax.set_ylabel("vpol")
     
     fig, ax  = plt.subplots(figsize=(8,4))
@@ -213,10 +239,35 @@ if plot_psi_landscape:
     pars = s._evaluate_pars()
     ax.set_title("k1: %.2f, k2: %.2f, k3: %.2f, rbp_br: %.2f, max. inh: %.3f" % 
                  (pars["k1_t"], pars["k2_t"], pars["k3_t"], pars["rbp_br_t"], pars["rbp_inh"]))
+    ax.set_title("PSI Landscape")
     # ... and label them with the respective list entries.
 #    col_labels = rbp_poss[indx_x]
 #    row_labels = vpols[indx_y]
     ax.set_xticklabels(col_labels, fontsize = 10, rotation=60)
     ax.set_yticklabels(row_labels, fontsize = 10)
-    ax.set_xlabel("RBP pos")
+    ax.set_xlabel("RBP position")
     ax.set_ylabel("vpol")
+
+if(inhibition_plot_inside == False):
+    fig, ax = plt.subplots(figsize=(2.5, 2))
+else:
+    ax = ax2_leg
+rbpp = 0
+u1_2_pos = pars["u1_2_pos"]
+u2_2_pos = pars["u2_2_pos"]
+rbp_h_c = pars["rbp_h_c"]
+rbp_poss = np.linspace(-rbp_e_up*2, rbp_e_down*2,100)
+asym_pr = s.get_function("asym_pr")["lambda_f"]
+inh_curve_u11 = [asym_pr(rbp_p, rbpp, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_poss]
+ax.plot(rbp_poss,inh_curve_u11,
+#            label = "$InhFunc$",
+        linestyle="-", lw=3)
+ax.axvline(rbpp, ls = "-.")
+#    ax.axvline(u1_2_pos, ls = ":")
+#    ax.axvline(u2_2_pos, ls = ":")
+#    ax.legend()
+ax.set_title("RBP inhibition effect")
+ax.set_title(rbp_inh_title)
+ax.set_ylabel("inh. strength")
+ax.set_xlabel("Distance in [nt]")
+fig.tight_layout()
