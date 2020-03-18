@@ -14,7 +14,7 @@ import support_th as sth
 import numpy as np
 
 #settings 
-steps_multiplier = 2
+steps_multiplier = 10
 
 l = 8
 l_many = l * steps_multiplier
@@ -97,10 +97,10 @@ axs[1].plot(vpols_analyt, psis_analyt, "bo",ms=8,  label="analytic solution")
 #axs[0].set_xlabel("vpol")
 axs[1].set_ylabel("PSI")
 axs[1].axvline(vpol_50p, ls="-", lw=1, color="blue", label = "50% commitment\nbefore $\\tau$ (P1-P6)")
-axs[1].axhline(psi_slow, ls="-.", lw=1, color="green", label = "PSI (P1-P6)")
-axs[1].axhline(psi_fast, ls="-.", lw=1, color="red", label = "PSI (P7-P8)")
+axs[1].axhline(psi_slow, ls="-.", lw=1, color="green", label = "PSI slow vpol")
+axs[1].axhline(psi_fast, ls="-.", lw=1, color="red", label = "PSI fast vpol")
 #axs[0].legend(loc = (1.15,0.3), fontsize=legend_fs)
-axs[0].legend(handles = axs[1].get_children()[0:4],
+axs[0].legend(handles = axs[1].get_children()[0:5],
    bbox_to_anchor  = (0,-0.2,1,1),
    loc = "lower right", fontsize=legend_fs)
 
@@ -109,7 +109,7 @@ axs[2].plot(vpols, psis_step, lw = 2, label = "few steps (%d)" % l)
 axs[2].plot(vpols, psis_many_step, lw = 2, label = "many steps (%d)" % l_many)
 axs[2].plot(vpols[0::10], psis_td[0::10], "bo", ms=8,
    label = "time delay model")
-axs[2].set_xlabel("vpol")
+axs[2].set_xlabel("vpol [nt/s]")
 axs[2].set_ylabel("PSI")
 #axs[1].set_title("Multi-step models")
 

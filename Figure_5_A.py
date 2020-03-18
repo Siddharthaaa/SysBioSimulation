@@ -51,6 +51,7 @@ if fig == "5B":
                           init_sp="P000", init_mol_counts=[10,20,30,40],
                           s_count= 2000, mc_variable = True)
     file_name = "Figure_5B.svg"
+    models = [s]
 
 if fig == "5A":
     #model corresponds to Fig 3 U-shape
@@ -64,15 +65,28 @@ if fig == "5A":
     s.set_raster(10000)
     x_label = "time after exon 2\n synthesis [s]"
     title="Splicing commitment\nmodel"
-    noise_pars = dict(par="vpol", vals=np.logspace(1,3,30),
+    #s shape
+    s2 =  bs.coTrSplCommitment(l=8, m1=0, m2=1, k=0, n=2,
+                    ki= 0.1, ks=0.02, kesc=1)["td_m"]
+    #bell shape
+    s3 =  bs.coTrSplCommitment(l=8, m1=0, m2=1, k=0, n=2,
+                    ki= 1e-1, ks=2e-1, kesc=0.2)["td_m"]
+    
+    noise_pars = dict(par="vpol", vals=np.logspace(0,3,15),
                           init_sp="mRNA", init_mol_counts=[10,50,200,1000],
                           s_count= 5000, mc_variable = False)
-    file_name = "Figure_5A.jpg"
-
+    file_name = "Figure_5A.svg"
+    models =[s, s2, s3]
+    
 figsize=(6,6)
 
 s.set_color("Incl", "green")
 s.set_color("Skip", "red")
+
+raster_start = np.arange(0, start_segment[1], 100)
+raster_after_s = np.arange(start_segment[1], s.runtime, 100)
+
+s.raster = np.concatenate((raster_start,raster_after_s))
 
 s.set_runtime(runtime)
 s.set_init_species(init_sp, init_mol_count)
@@ -128,28 +142,35 @@ s.annotate_timeEvents2(ax_start, y_axes_offset=-0.1, text_ax_offset= -0.5,
 
 s.set_runtime(runtime)
 
-def compare_to_binomial(model, par="vpol", vals=np.linspace(10,1000,50), init_sp = "mRNA",
+def compare_to_binomial(models, par="vpol", vals=np.linspace(10,1000,50), init_sp = "mRNA",
                         init_mol_counts = [20,200,500], s_count = 100, mc_variable=False, ax = None):
-    s = model
-    s.set_raster(100)
-    psi_means = np.zeros(len(vals) * len(init_mol_counts))
+    
+    if type(models) is not list:
+        models = [models]
+    
+    psi_means = np.zeros(len(vals) * len(init_mol_counts) * len(models))
     psi_stds = np.array(psi_means)
     counts = np.array(psi_means)
+    m_is  = np.array(psi_means)
     i=0
-    for m_count in init_mol_counts:
-        s.set_init_species(init_sp, m_count)
-        for  v in vals:
-            print("mc: ", m_count, "\n", par, ": ", v)
-            s.set_param(par, v)
-            s.simulate(s_count, verbose=False)
-            incls = s.get_res_col("Incl", series=True)[:,-1]
-            skips = s.get_res_col("Skip", series=True)[:,-1]
-            counts[i] = np.mean(skips + incls)
-            
-            psis_end = incls/(incls+skips)
-            psi_means[i] = np.mean(psis_end)
-            psi_stds[i] = np.std(psis_end)
-            i += 1
+    m_i = 0
+    for s in models:
+        for m_count in init_mol_counts:
+            s.set_init_species(init_sp, m_count)
+            for  v in vals:
+                print("mc: ", m_count, "\n", par, ": ", v)
+                s.set_param(par, v)
+                s.simulate(s_count, verbose=False)
+                incls = s.get_res_col("Incl", series=True)[:,-1]
+                skips = s.get_res_col("Skip", series=True)[:,-1]
+                counts[i] = np.mean(skips + incls)
+                
+                psis_end = incls/(incls+skips)
+                psi_means[i] = np.mean(psis_end)
+                psi_stds[i] = np.std(psis_end)
+                m_is[i] = m_i
+                i += 1
+        m_i += 1
         
     if(ax is None):
         fig = plt.figure()
@@ -177,16 +198,17 @@ def compare_to_binomial(model, par="vpol", vals=np.linspace(10,1000,50), init_sp
             ax.plot(psis_th, b_stds, color = "black", lw=1,ls=ls,
                     alpha = 0.5,
                     label = "mc: %d" % mc )
-        paths = ax.scatter(psi_means, psi_stds, s = 40, c = "C0", cmap = cmap, alpha=0.35)
-        ax.set_ylabel("mean(PSI)", weight="bold")
-        ax.set_xlabel("std(PSI)", weight="bold")
+        paths = ax.scatter(psi_means, psi_stds, s = 40, c = m_is, edgecolors = "black",
+                           cmap = cmap, alpha=0.35)
+        ax.set_xlabel("mean(PSI)", weight="bold")
+        ax.set_ylabel("std(PSI)", weight="bold")
         ax.set_title("Noise-mean relationship", weight="bold")
         ax.legend(ncol=1, fontsize=6)
 #                  bbox_to_anchor =(1.1,0,1, 0.1))
         
     return dict(counts = counts, psi_means= psi_means, psi_stds = psi_stds,ax= ax, fig=fig)
 
-res = compare_to_binomial(model=s, ax = ax_std, **noise_pars)
+res = compare_to_binomial(models, ax = ax_std, **noise_pars)
 
 fig.tight_layout()
 plt.savefig(file_name, dpi=300)
