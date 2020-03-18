@@ -15,8 +15,10 @@ import math
 
 import matplotlib
 import matplotlib.colors as colors
+import matplotlib.transforms as transforms
 import matplotlib.cm as cm
 import matplotlib.mlab as mlab
+from matplotlib.text import Text
 from matplotlib import gridspec
 from scipy.optimize import fsolve
 
@@ -136,21 +138,22 @@ class SimPlotting:
         print(products)  
         indx = np.where((self.raster >= t_bounds[0]) * (self.raster <= t_bounds[1]))[0]
         tt = self.raster[indx]
+        print(tt)
         indices, cols = self._get_indices_and_colors(products)
 
         for index, col, p in zip(indices, cols, products):
             results = self._last_results[:,indx,index]
             mean = np.mean(results, axis = 0)
-            ax.plot(tt, results.T, c=col, lw=0.2, alpha=0.5)
+            ax.plot(tt, results.T, c=col, lw=0.2, alpha=0.3, antialiased=True)
             ax.plot(tt, mean, c = col, lw=3, label = p, alpha=1)
-        ax.legend()
+#        ax.legend()
         count = len(self._last_results)
         ax.set_title(str(count) + " Realizations")
         ax.set_xlabel("time")
         ax.set_ylabel("#")
         return ax
     
-    def plot_parameters(self, parnames =[], parnames2=[], annotate=True, ax=None, **plotargs):
+    def plot_parameters(self, parnames =[], parnames2=[], annotate=False, ax=None, **plotargs):
         
         if ax == None:
             fig, ax = plt.subplots(1, figsize=(10,3))
@@ -205,6 +208,53 @@ class SimPlotting:
                 ax.annotate(te.name, (te.t,0),  (-40, -(40+k*offset)),
                             textcoords = "offset pixels", 
                             arrowprops={"arrowstyle": "-"})
+    def annotate_timeEvents2(self, ax = None, y_axes_offset=0, text_ax_offset=-0.2,
+                             line_kw=dict(),
+                             text_kw=dict()):
+        t_events = sorted(self._time_events.copy())
+        ts = [] #time points
+        ts.append(0)
+        te_textes = []
+        fig = ax.get_figure()
+        inv = ax.transData.inverted()
+        _tmp, y_offset = ax.transAxes.transform((0, y_axes_offset))
+        print("offset coord ", (y_offset))
+        trans = transforms.blended_transform_factory(
+                    ax.transData, ax.transAxes)
+        renderer = fig.canvas.get_renderer()
+        for k, te in enumerate(t_events):
+            if(te.t <= self.runtime):
+                ts.append(te.t)
+                text = ax.annotate(te.name, (te.t, y_axes_offset),  (0, text_ax_offset),
+                            xycoords = trans,
+                            textcoords = ("offset pixels","axes fraction"), 
+                            annotation_clip = False,
+                            arrowprops={"arrowstyle": "-"},
+                            **text_kw)
+                text.arrow_patch.set_color("grey")
+                text.arrow_patch.set_ls("--")
+                
+                text.set_va("center")
+                text.set_ha("center")
+                bbox = text.get_window_extent(renderer = renderer)
+                x0, y0, w, h = inv.transform(bbox.bounds)
+                print("AAAAAAAA coord: \n", bbox.bounds)
+                text_ok = False
+                i = 1
+                while(not text_ok):
+                    text.set_position((0, text_ax_offset - i*0.01))
+                    bbox = text.__class__.__bases__[0].get_window_extent(text, renderer = renderer)
+#                    print("AAAAAAAAAAAAA", bbox.bounds)
+                    i+=1
+                    text_ok = True
+                    for t in te_textes:
+                        bb = t.get_window_extent()
+                        if(bb.fully_overlaps(bbox)):
+                            text_ok = False
+                te_textes.append(text)
+                x0, y0, w, h = inv.transform(bbox.bounds)
+#                ax.plot((te.t, te.t), (offset, 10), ls="-", clip_on=False)    
+    
     
     def plot_par_var_1d(self, par = "s1", vals = [1,2,3,4,5], label = None, label_axes=False,
                         ax=None, plot_args = dict(), func=None, **func_pars):

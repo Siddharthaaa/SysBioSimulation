@@ -22,7 +22,7 @@ import numpy as np
 
 #settings 
 fontsize=11
-legend_fs = 9
+legend_fs = 10
 legend_outside = True
 set_title = False
 esc_share = True
@@ -49,8 +49,9 @@ vs["50% commitment\nbefore $\\tau_{inh,2}$ (P1)"] = vpol_50p
 #vs["50% commitment\nbetween $\\tau_{inh,1}$ and $\\tau1_{inh,2}$\n (P1-P2)"] = vpol_50p
 #    horizintals
 hs= {}
-hs["PSI (P1)"] = topol["ki"]/(topol["ki"] + topol["kesc"])
-hs["PSI (P7-P8)"] = topol["ki"]/(topol["ki"] + topol["ks"])
+#hs["PSI (P1)"] = topol["ki"]/(topol["ki"] + topol["kesc"])
+hs["PSI slow"] = topol["ki"]/(topol["ki"] + topol["kesc"])
+hs["PSI fast"] = topol["ki"]/(topol["ki"] + topol["ks"])
 models.append(
         dict(name = "early inh. S-Shape",
              topol=topol, vs=vs, hs=hs))
@@ -60,14 +61,14 @@ topol = dict(l=8, m1=0, m2=1, k=0, n=2,
                     ki= 1e-1, ks=2e-1, kesc=0.2)
  #verticals
 vs = {}
-vpol_50p = -topol["ki"] * tr_len/(l*np.log(0.5))*topol["m1"]
-vs["50% commitment\nbefore $\\tau_{inh,2}$ (P1)"] = vpol_50p
+#vpol_50p = -topol["ki"] * tr_len/(l*np.log(0.5))*topol["m1"]
+#vs["50% commitment\nbefore $\\tau_{inh,2}$ (P1)"] = vpol_50p
 vpol_50p = -(topol["kesc"]+topol["ki"]) * tr_len/(l*np.log(0.5))*topol["m2"]
 vs["50% commitment\nbetween $\\tau_{inh,1}$ and $\\tau_{inh,2}$\n (P1-P2)"] = vpol_50p
 #    horizintals
 hs= {}
-hs["PSI (P1)"] = topol["ki"]/(topol["ki"] + topol["kesc"])
-hs["PSI (P7-P8)"] = topol["ki"]/(topol["ki"] + topol["ks"])
+hs["PSI slow"] = topol["ki"]/(topol["ki"] + topol["kesc"])
+hs["PSI fast"] = topol["ki"]/(topol["ki"] + topol["ks"])
 #hs["PSI (P2-P6)"] = 1
 models.append(
         dict(name = "early inh. Bell-shape",
@@ -85,8 +86,8 @@ vpol_50p = -(topol["kesc"]+topol["ki"]) * tr_len/(l*np.log(0.5))*topol["m2"]
 vs["50% commitment\nbetween $\\tau_{inh,1}$ and $\\tau_{inh,2}$\n (P1-P2)"] = vpol_50p
 #    horizintals
 hs= {}
-hs["PSI (P1-P2)"] = 1
-hs["PSI (P7-P8)"] = topol["ki"]/(topol["ki"] + topol["ks"])
+hs["PSI slow"] = 1
+hs["PSI fast"] = topol["ki"]/(topol["ki"] + topol["ks"])
 hs["PSI (P3-P5)"] = topol["ki"]/(topol["ki"] + topol["kesc"])
 models.append(
         dict(name = "late inh. U-shape",
@@ -97,19 +98,25 @@ h = 2.7
 
 
 if legend_outside:
-    figsize=(5.4, h*m_c)
+    figsize=(6.5, h*m_c)
     leg_loc = (1.10 + esc_share*0.15, 0.05 + esc_share*0.2)
     leg_loc_share = (1.10 + esc_share*0.15, 0.05)
-    cols = 1
+    cols = 2
+    leg_col=1
 else:
     figsize=(3, h*m_c)
     leg_loc = "best"
     cols = 1
+    leg_col = 0
     
 fig_all, axs = plt.subplots(len(models), cols, figsize=figsize,
                         squeeze=False,
                         sharex=True)
 
+for ax in axs[:,1]:
+    ax.axis("off")
+
+legends=[]
 for m_i, model in enumerate(models):
     step_m, td_m, psi_f = bs.coTrSplCommitment(vpol=50, tr_len=300,
                                        **model["topol"]).values()
@@ -141,24 +148,26 @@ for m_i, model in enumerate(models):
     
     vpols_analyt = vpols[0::10]
     psis_analyt = [psi_f(vpol2) for vpol2 in vpols_analyt]
-    
-    axs[m_i,0].plot(vpols, psis_td, lw = 4, c = "green", label= "Time Delay model")
-    axs[m_i,0].plot(vpols, psis_step, lw = 1, c = "red", label = "step model")
-    axs[m_i,0].plot(vpols_analyt, psis_analyt, "bo",ms=8,  label="analytic")
+    #lists for legends
+    indv_leg =[]
+    shared_leg=[]
+    shared_leg.append(axs[m_i,0].plot(vpols, psis_td, lw = 4, c = "green", label= "Time Delay model")[0])
+#    shared_leg.append(axs[m_i,0].plot(vpols, psis_step, lw = 1, c = "red", label = "step model")[0])
+    shared_leg.append(axs[m_i,0].plot(vpols_analyt, psis_analyt, "bo",ms=8,  label="analytic")[0])
     
     if(esc_share):
         ax_twin = axs[m_i,0].twinx()
-        ax_twin.plot(vpols, esc_det_td, ls="--", c="black", lw=1, label="share of $mRNA_{inh}$")
-        ax_twin.legend(loc = leg_loc_share, fontsize=legend_fs)
+        shared_leg.append(ax_twin.plot(vpols, esc_det_td, ls="--", c="black", lw=1, label="share of $mRNA_{inh}$")[0])
+#        ax_twin.legend(loc = leg_loc_share, fontsize=legend_fs)
     
     axs[m_i,0].set_ylabel("PSI")
     if(set_title == True):
         axs[m_i,0].set_title(model["name"])
     
     for i, (k, v)  in enumerate(model["vs"].items()):
-        axs[m_i,0].axvline(v, ls="-", lw=1,c="C"+str(i), label = k)
+        indv_leg.append(axs[m_i,0].axvline(v, ls="-", lw=1,c="C"+str(i), label = k))
     for i, (k, v)  in enumerate(model["hs"].items()):
-        axs[m_i,0].axhline(v, ls=":", lw=2,c="C"+str(i), label = k)
+        indv_leg.append(axs[m_i,0].axhline(v, ls=":", lw=2,c="C"+str(i), label = k))
     
 
 #    axs[1].plot(vpols, psis_step, lw = 2, label = "step model (%d)" % l)
@@ -169,9 +178,9 @@ for m_i, model in enumerate(models):
 #    axs[1].set_ylabel("PSI")
 #    axs[1].set_title("Multi-step models")
     
-    axs[m_i,0].legend(loc = leg_loc, fontsize=legend_fs)
+    legends.append(axs[m_i,1].legend(handles = shared_leg, loc = "upper left", fontsize=legend_fs))
+    axs[m_i,1].legend(handles = indv_leg, loc = "lower left", fontsize=legend_fs)
     
-
     
     td_m.set_param("vpol", 50)
     td_m.set_runtime(6)
@@ -184,6 +193,7 @@ for m_i, model in enumerate(models):
     ax.set_title("Parameters (vpol=%.1f)" % td_m.params["vpol"])
     ax.legend(loc="best")
     [fig.tight_layout() for i in  range(3)]
-
+#axs[0,1].legend(handles=shared_leg, loc ="upper left", fontsize=legend_fs)
+axs[0,1].add_artist(legends[0])
 axs[m_i,0].set_xlabel("vpol")
 [fig_all.tight_layout() for i in  range(1)]

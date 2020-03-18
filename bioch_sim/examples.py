@@ -447,12 +447,12 @@ def coTrSplMechanistic():
                                    ((1/(1+((x-rbpp)/r)**p)), True))
     s.add_function(f_asym_pr_sympy, (x, rbpp , l, r, p), "asym_pr")
     
-    te1 = TimeEvent("u1_1_pos/vpol", "k1=k1_t; k1_inh=k1_inh_t", name="Ex1 avail")
-    te2 = TimeEvent("u1_2_pos/vpol", "k2=k2_t; k2_inh=k2_inh_t", name="Ex2 avail")
-    te3 = TimeEvent("u1_3_pos/vpol", "k3=k3_t; k3_inh=k3_inh_t", name="Ex3 avail")
-    te4 = TimeEvent("rbp_pos/vpol", "rbp_br=rbp_br_t", name="RBP b. start")
-    te5 = TimeEvent("(rbp_pos+pol_dist)/vpol", "rbp_br=rbp_bbr", name="RBP b. end")
-    te6 = TimeEvent("gene_len/vpol", "ret_r = ret_r_t", name="ret possible")
+    te1 = TimeEvent("u1_1_pos/vpol", "k1=k1_t; k1_inh=k1_inh_t", name="Ex1")
+    te2 = TimeEvent("u1_2_pos/vpol", "k2=k2_t; k2_inh=k2_inh_t", name="Ex2")
+    te3 = TimeEvent("u1_3_pos/vpol", "k3=k3_t; k3_inh=k3_inh_t", name="Ex3")
+    te4 = TimeEvent("rbp_pos/vpol", "rbp_br=rbp_br_t", name="RBP+")
+    te5 = TimeEvent("(rbp_pos+pol_dist)/vpol", "rbp_br=rbp_bbr", name="RBP-")
+    te6 = TimeEvent("gene_len/vpol", "ret_r = ret_r_t", name="transcr. end")
     #
     s.add_timeEvent(te1)
     s.add_timeEvent(te2)
