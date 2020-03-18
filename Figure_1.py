@@ -47,10 +47,10 @@ plt.rc("font", size=fontsize)
 #settings  end
 
 if legend_outside:
-    figsize=(6.5, 5.2)
+    figsize=(6, 9)
     leg_loc = (1.15, 0.3)
 else:
-    figsize=(3.7, 5.2)
+    figsize=(3.5, 7)
     leg_loc = "best"
 
 models = bs.coTrSplCommitment(50, tr_len=tr_len, l=l, m1=0, m2=0, k=0, n=n,
@@ -64,10 +64,10 @@ models = bs.coTrSplCommitment(50, tr_len=tr_len, l=l_many, m1=0, m2=0, k=0, n=n_
                    ki=ki, ks=ks, kesc=kesc, kesc_r=0)
 many_step_m = models["step_m"]
 
-fig, axs = plt.subplots(2,1, figsize=figsize)
-axs[0].set_xscale("log")
+fig, axs = plt.subplots(3,1, figsize=figsize)
 axs[1].set_xscale("log")
-
+axs[2].set_xscale("log")
+axs[0].axis("off")
 
 psis_step = []
 psis_many_step = []
@@ -91,27 +91,29 @@ for vpol in vpols:
 vpols_analyt = vpols[0::10]
 psis_analyt = [psi_f(vpol2) for vpol2 in vpols_analyt]
 
-axs[0].plot(vpols, psis_td, lw = 4, c = "green", label= "time delay model")
+axs[1].plot(vpols, psis_td, lw = 4, c = "green", label= "time delay model")
 #axs[0].plot(vpols, psis_td, lw = 4, c = "green")
-axs[0].plot(vpols_analyt, psis_analyt, "bo",ms=8,  label="analytic solution")
+axs[1].plot(vpols_analyt, psis_analyt, "bo",ms=8,  label="analytic solution")
 #axs[0].set_xlabel("vpol")
-axs[0].set_ylabel("PSI")
-axs[0].axvline(vpol_50p, ls="-", lw=1, color="blue", label = "50% commitment\nbefore $\\tau$ (P1-P6)")
-axs[0].axhline(psi_slow, ls="-.", lw=1, color="green", label = "PSI (P1-P6)")
-axs[0].axhline(psi_fast, ls="-.", lw=1, color="red", label = "PSI (P7-P8)")
-#axs[0].legend(loc = (1.15,0.3), fontsize=legend_fs)
-axs[0].legend(loc = leg_loc, fontsize=legend_fs)
-
-
-axs[1].plot(vpols, psis_step, lw = 2, label = "few steps (%d)" % l)
-axs[1].plot(vpols, psis_many_step, lw = 2, label = "many steps (%d)" % l_many)
-axs[1].plot(vpols[0::10], psis_td[0::10], "bo", ms=8,
-   label = "time delay model")
-axs[1].set_xlabel("vpol")
 axs[1].set_ylabel("PSI")
+axs[1].axvline(vpol_50p, ls="-", lw=1, color="blue", label = "50% commitment\nbefore $\\tau$ (P1-P6)")
+axs[1].axhline(psi_slow, ls="-.", lw=1, color="green", label = "PSI (P1-P6)")
+axs[1].axhline(psi_fast, ls="-.", lw=1, color="red", label = "PSI (P7-P8)")
+#axs[0].legend(loc = (1.15,0.3), fontsize=legend_fs)
+axs[0].legend(handles = axs[1].get_children()[0:4],
+   bbox_to_anchor  = (0,-0.2,1,1),
+   loc = "lower right", fontsize=legend_fs)
+
+
+axs[2].plot(vpols, psis_step, lw = 2, label = "few steps (%d)" % l)
+axs[2].plot(vpols, psis_many_step, lw = 2, label = "many steps (%d)" % l_many)
+axs[2].plot(vpols[0::10], psis_td[0::10], "bo", ms=8,
+   label = "time delay model")
+axs[2].set_xlabel("vpol")
+axs[2].set_ylabel("PSI")
 #axs[1].set_title("Multi-step models")
 
-axs[1].legend(loc = leg_loc, fontsize=legend_fs)
+axs[2].legend(loc = leg_loc, fontsize=legend_fs)
 
 [fig.tight_layout() for i in  range(3)]
 
