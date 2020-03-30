@@ -10,10 +10,14 @@ Created on Wed Mar  4 11:23:34 2020
 import bioch_sim as bs
 import matplotlib.pyplot as plt
 import support_th as sth
-
+import os
 import numpy as np
 
 #settings 
+parameters_table_dir = os.path.join("docs", "pars_csv")
+sbml_dir = os.path.join("docs", "sbml")
+create_model_files = True
+
 steps_multiplier = 10
 
 l = 8
@@ -59,10 +63,24 @@ models = bs.coTrSplCommitment(50, tr_len=tr_len, l=l, m1=0, m2=0, k=0, n=n,
 step_m = models["step_m"]
 td_m = models["td_m"]
 psi_f = models["psi_analytic_f"]
+step_m.set_runtime(1e4)
+td_m.set_runtime(1e4)
 
 models = bs.coTrSplCommitment(50, tr_len=tr_len, l=l_many, m1=0, m2=0, k=0, n=n_many,
                    ki=ki, ks=ks, kesc=kesc, kesc_r=0)
 many_step_m = models["step_m"]
+
+if (create_model_files):
+    if(not os.path.exists(parameters_table_dir)):
+        os.makedirs(parameters_table_dir)
+    step_m.toSBML(os.path.join(sbml_dir, "Fig.1D_step.sbml"))
+    td_m.toSBML(os.path.join(sbml_dir, "Fig.1D_TD.sbml"))
+    many_step_m.toSBML(os.path.join(sbml_dir, "Fig.1D_step_10x.sbml"))
+    df, pars = td_m.get_parTimeTable()
+    df_filtered = df[["from", "to"] + pars]
+    df_filtered.to_csv(os.path.join(parameters_table_dir, "Fig.1D_TD_pars_changed.csv"))
+    df.to_csv(os.path.join(parameters_table_dir, "Fig.1D_TD_pars_all.csv"))
+    
 
 fig, axs = plt.subplots(3,1, figsize=figsize)
 axs[1].set_xscale("log")

@@ -7,7 +7,7 @@ Created on Wed Mar 11 13:31:39 2020
 """
 
 
-
+import os
 import bioch_sim as bs
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -17,7 +17,13 @@ import numpy as np
 import sympy as sy
 
 
+parameters_table_dir = os.path.join("docs", "pars_csv")
+sbml_dir = os.path.join("docs", "sbml")
+create_model_files = True
+
 skewed_RBP_effect = True
+plot_psi_landscape = False
+inhibition_plot_inside = False
 
 sim_series_rbp_pos = True
 sim_series_rbp_pos_vpol = 50
@@ -25,17 +31,18 @@ if skewed_RBP_effect:
     rbp_upstream_radius = 1
     rbp_downstream_radius = 80
     rbp_inh_title = "Right-skewed RBP effect"
+    f_name = "Fig.4_skewed"
 else:
     rbp_upstream_radius = 30
     rbp_downstream_radius = 40
     rbp_inh_title = "Bidirectional  RBP effect"
+    f_name = "Fig.4_bidirectional"
 sim_series_rbp_pos_add_vpols = [10, 50, 200, 10000]
 rbp_posistions = np.linspace(100, 600, 101)
 
 figsize=(8,4.5)
 
-plot_psi_landscape = False
-inhibition_plot_inside = False
+
 
 pars = dict(vpol=50,
             rbp_pos = 480,
@@ -51,18 +58,26 @@ pars = dict(vpol=50,
 
 
 s = bs.coTrSplMechanistic()
-
 s.params.update(pars)
+
+if create_model_files:
+#    f_name = "Fig.4_parameters"
+    s.toSBML(os.path.join(sbml_dir, f_name + ".xml"))
+    df, pars = s.get_parTimeTable()
+    df_filtered = df[["from", "to"] + pars]
+    df.to_csv(os.path.join(parameters_table_dir, f_name + ".csv"))
+    df_filtered.to_csv(os.path.join(parameters_table_dir, f_name  + "_filtered.csv"))
+
 s.compile()
 pars = s._evaluate_pars()
 rbp_pos = pars["rbp_pos"]
 vpol = pars["vpol"]
 rbp_e_up = pars["rbp_e_up"]
 rbp_e_down = pars["rbp_e_down"]
-u1_1_pos = pars["u1_1_pos"]
-u2_1_pos = pars["u2_1_pos"]
-u1_2_pos = pars["u1_2_pos"]
-u2_2_pos = pars["u2_2_pos"]
+u1_1_pos = pars["u1_ex1"]
+u2_1_pos = pars["u2_ex2"]
+u1_2_pos = pars["u1_ex2"]
+u2_2_pos = pars["u2_ex3"]
 rbp_inh = pars["rbp_inh"]
 
 
@@ -253,12 +268,12 @@ if(inhibition_plot_inside == False):
 else:
     ax = ax2_leg
 rbpp = 0
-u1_2_pos = pars["u1_2_pos"]
-u2_2_pos = pars["u2_2_pos"]
+u1_2_pos = pars["u1_ex2"]
+u2_2_pos = pars["u2_ex3"]
 rbp_h_c = pars["rbp_h_c"]
 rbp_poss = np.linspace(-rbp_e_up*2, rbp_e_down*2,100)
-asym_pr = s.get_function("asym_pr")["lambda_f"]
-inh_curve_u11 = [asym_pr(rbp_p, rbpp, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_poss]
+inhFunc = s.get_function("inhFunc")["lambda_f"]
+inh_curve_u11 = [inhFunc(rbp_p- rbpp, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_poss]
 ax.plot(rbp_poss,inh_curve_u11,
 #            label = "$InhFunc$",
         linestyle="-", lw=3)
@@ -267,7 +282,7 @@ ax.axvline(rbpp, ls = "-.")
 #    ax.axvline(u2_2_pos, ls = ":")
 #    ax.legend()
 ax.set_title("RBP inhibition effect")
-ax.set_title(rbp_inh_title)
+ax.set_title(rbp_inh_title, fontsize=10)
 ax.set_ylabel("inh. strength")
 ax.set_xlabel("Distance in [nt]")
 fig.tight_layout()

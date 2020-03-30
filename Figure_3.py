@@ -15,7 +15,7 @@ Created on Tue Nov 19 12:20:54 2019
 """
 
 
-
+import os
 import bioch_sim as bs
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -32,6 +32,11 @@ legend_outside = True
 parameters_plot = True
 inhibition_plot = True
 
+
+parameters_table_dir = os.path.join("docs", "pars_csv")
+sbml_dir = os.path.join("docs", "sbml")
+create_model_files = True
+
 if legend_outside:
     figsize=(6.5, 5.2)
     leg_loc = (1.15, 0.3)
@@ -40,8 +45,12 @@ else:
     leg_loc = "best"
 
 settings = np.zeros((2,2), dtype=object)    
-#"Fig 3B2": # increasing
-    
+
+
+f_names = np.zeros((2,2), dtype=object)
+
+
+#"Fig 3B2": # increasing    
 settings[1,0] = dict(
 rbp_pos = 430,
 rbp_inh = 1,
@@ -49,6 +58,7 @@ rbp_br_t= 1,
 k1_t = 10,
 k2_t = 1e-1,
 k3_t =2e-2)
+f_names[1,0] = "Fig.3D_increasing"
         
 #"Fig 3B3": # bell shape
 settings[0,0] = dict(
@@ -58,6 +68,8 @@ rbp_inh = 1,
 k1_t = 10,
 k2_t = 0.2,
 k3_t = 1)
+f_names[0,0] = "Fig.3D_bell_shape"
+
     
 #"Fig 3B4": # u-shape
 settings[1,1] = dict(
@@ -67,6 +79,8 @@ k1_t = 10,
 k2_t = 0.2,
 k3_t = 0.02,
 rbp_inh = 1)
+f_names[1,1] = "Fig.3D_u_shape"
+
     
 #"Fig 3B5": # 2 extremes 
 settings[0,1] = dict(
@@ -76,6 +90,7 @@ rbp_inh = 1,
 k1_t = 10,
 k2_t = 0.1,
 k3_t = 2)
+f_names[0,1] = "Fig.3D_two_extremes"
 
 
 fig, axs = plt.subplots(2,2, figsize=(6,6), sharex=True, sharey=True,
@@ -89,8 +104,22 @@ for i in range(len(settings)):
         ax = axs[i,j]
         vpols = vpol_profile_vpols
         s.set_raster(30001)
-        s.set_runtime(1e5)
+        s.set_runtime(1e4)
         s.params.update(settings[i,j])
+        s.set_param("vpol", 50)
+        
+        if create_model_files:
+            f_name = f_names[i,j] 
+            if(not os.path.exists(parameters_table_dir)):
+                os.makedirs(parameters_table_dir)
+            print(f_name)
+            s.toSBML(os.path.join(sbml_dir, f_name + ".xml"))
+#            td_m.toSBML(os.path.join(sbml_dir, f_sbml))
+            df, pars = s.get_parTimeTable()
+            df_filtered = df[["from", "to"] + pars]
+            df.to_csv(os.path.join(parameters_table_dir, f_name + ".csv"))
+            df_filtered.to_csv(os.path.join(parameters_table_dir, f_name  + "_filtered.csv"))
+        
         psis = []
         psis_no_rbp = []
         psis_full_rbp = []
@@ -170,6 +199,13 @@ if parameters_plot:
                 k3_t = 0.4,
                 ret_t = 1e-3 )
     s.params.update(pars)
+    if create_model_files:
+        f_name = "Fig.3C_parameters"
+        s.toSBML(os.path.join(sbml_dir, f_name + ".xml"))
+        df, pars = s.get_parTimeTable()
+        df_filtered = df[["from", "to"] + pars]
+        df.to_csv(os.path.join(parameters_table_dir, f_name + ".csv"))
+        df_filtered.to_csv(os.path.join(parameters_table_dir, f_name  + "_filtered.csv"))
     pars = s._evaluate_pars()
     rbp_pos = pars["rbp_pos"]
     vpol = pars["vpol"]
@@ -197,7 +233,7 @@ if parameters_plot:
     ax.set_ylabel("RBP binding rate")
     ax.set_xlabel("time")
     ax_twin = ax.twinx()
-    ax_twin = s.plot_parameters(parnames=["ret_r"], annotate=False, ax=ax_twin, lw=3, c="orange")
+    ax_twin = s.plot_parameters(parnames=["k_ret"], annotate=False, ax=ax_twin, lw=3, c="orange")
     ax_twin.legend(loc="upper right")
     ax_twin.set_ylabel("Intron ret. rate")
     fig.tight_layout()
@@ -206,17 +242,17 @@ if parameters_plot:
 if(inhibition_plot):
     fig, ax = plt.subplots(figsize=(3.5,2.4))
     rbpp = rbp_pos
-    u1_2_pos = pars["u1_2_pos"]
-    u2_2_pos = pars["u2_2_pos"]
+    u1_2_pos = pars["u1_ex2"]
+    u2_2_pos = pars["u2_ex3"]
     rbp_poss = np.linspace(rbp_pos-rbp_e_up*2, rbp_pos+rbp_e_down*2,100)
-    asym_pr = s.get_function("asym_pr")["lambda_f"]
-    inh_curve_u11 = [asym_pr(rbp_p, rbpp, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_poss]
+    asym_pr = s.get_function("inhFunc")["lambda_f"]
+    inh_curve_u11 = [asym_pr(rbp_p- rbpp, rbp_e_up, rbp_e_down, rbp_h_c) for rbp_p in rbp_poss]
     ax.plot(rbp_poss,inh_curve_u11, label = "$InhFunc$", linestyle="-", lw=3)
     ax.axvline(rbpp, ls = "-.")
     ax.axvline(u1_2_pos, ls = ":")
     ax.axvline(u2_2_pos, ls = ":")
-    ax.legend()
+#    ax.legend()
     
-    ax.set_ylabel("RBP inhibition strength")
+    ax.set_ylabel("Inh. strength")
     fig.tight_layout()
 

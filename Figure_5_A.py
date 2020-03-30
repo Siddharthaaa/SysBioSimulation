@@ -19,7 +19,9 @@ import scipy.stats as st
 
 sim_count = 100
 init_mol_count = 100
-
+parameters_table_dir = os.path.join("docs", "pars_csv")
+sbml_dir = os.path.join("docs", "sbml")
+create_model_files = True
 
 fig = "5A"
 
@@ -50,7 +52,7 @@ if fig == "5B":
     noise_pars = dict(par="rbp_pos", vals=np.linspace(220,280,20),
                           init_sp="P000", init_mol_counts=[10,20,30,40],
                           s_count= 2000, mc_variable = True)
-    file_name = "Figure_5B.svg"
+    file_name = "Figure_5B"
     models = [s]
 
 if fig == "5A":
@@ -73,12 +75,21 @@ if fig == "5A":
                     ki= 1e-1, ks=2e-1, kesc=0.2)["td_m"]
     
     noise_pars = dict(par="vpol", vals=np.logspace(0,3,15),
-                          init_sp="mRNA", init_mol_counts=[10,50,200,1000],
+                          init_sp="mRNA", init_mol_counts=[10, 50, 200, 1000],
                           s_count= 5000, mc_variable = False)
-    file_name = "Figure_5A.svg"
+    file_name = "Figure_5A"
+    
     models =[s, s2, s3]
     
 figsize=(6,6)
+
+if create_model_files:
+    f_name = file_name
+    s.toSBML(os.path.join(sbml_dir, f_name + ".xml"))
+    df, pars = s.get_parTimeTable()
+    df_filtered = df[["from", "to"] + pars]
+    df.to_csv(os.path.join(parameters_table_dir, f_name + ".csv"))
+    df_filtered.to_csv(os.path.join(parameters_table_dir, f_name  + "_filtered.csv"))
 
 s.set_color("Incl", "green")
 s.set_color("Skip", "red")
@@ -155,6 +166,7 @@ def compare_to_binomial(models, par="vpol", vals=np.linspace(10,1000,50), init_s
     i=0
     m_i = 0
     for s in models:
+        s.set_runtime(1000)
         for m_count in init_mol_counts:
             s.set_init_species(init_sp, m_count)
             for  v in vals:
@@ -211,4 +223,4 @@ def compare_to_binomial(models, par="vpol", vals=np.linspace(10,1000,50), init_s
 res = compare_to_binomial(models, ax = ax_std, **noise_pars)
 
 fig.tight_layout()
-plt.savefig(file_name, dpi=300)
+plt.savefig(file_name + ".png", dpi=400)

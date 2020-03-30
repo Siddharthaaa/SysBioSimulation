@@ -82,6 +82,7 @@ class SimParam(SimParam):
         #http://www.graphviz.org/doc/info/attrs.html        
         def draw_place (place, attr) :
 #            print(attr)
+            print("PLACE NAME: ", place.name)
             attr['label'] = place.name
             attr['color'] = colors.to_hex(self._get_color(place.name))
         def draw_transition (trans, attr) :

@@ -14,7 +14,8 @@ Created on Wed Mar  4 11:23:34 2020
 """
 
 
-
+import os
+import re
 import bioch_sim as bs
 import matplotlib.pyplot as plt
 
@@ -30,6 +31,10 @@ plt.rc('xtick', labelsize=fontsize)    # fontsize of the tick labels
 plt.rc('ytick', labelsize=fontsize)
 plt.rc("font", size=fontsize)
 
+
+parameters_table_dir = os.path.join("docs", "pars_csv")
+sbml_dir = os.path.join("docs", "sbml")
+create_model_files = True
 l = 8
 #n = 2
 vpol = 50
@@ -54,7 +59,9 @@ hs["PSI slow"] = topol["ki"]/(topol["ki"] + topol["kesc"])
 hs["PSI fast"] = topol["ki"]/(topol["ki"] + topol["ks"])
 models.append(
         dict(name = "early inh. S-Shape",
-             topol=topol, vs=vs, hs=hs))
+             topol=topol, vs=vs, hs=hs,
+             f_name_params = "Fig.2C_1.csv",
+             f_name_sbml = "Fig.2C_1.sbml"))
 
 #MODEL 3: Bell-Shape
 topol = dict(l=8, m1=0, m2=1, k=0, n=2,
@@ -72,7 +79,9 @@ hs["PSI fast"] = topol["ki"]/(topol["ki"] + topol["ks"])
 #hs["PSI (P2-P6)"] = 1
 models.append(
         dict(name = "early inh. Bell-shape",
-             topol=topol, vs=vs, hs=hs))
+             topol=topol, vs=vs, hs=hs,
+             f_name_params = "Fig.2C_2.csv",
+             f_name_sbml = "Fig.2C_2.sbml"))
 
 
 #MODEL 1: U-Shape
@@ -91,7 +100,9 @@ hs["PSI fast"] = topol["ki"]/(topol["ki"] + topol["ks"])
 hs["PSI (P3-P5)"] = topol["ki"]/(topol["ki"] + topol["kesc"])
 models.append(
         dict(name = "late inh. U-shape",
-             topol=topol, vs=vs, hs=hs))
+             topol=topol, vs=vs, hs=hs,
+             f_name_params = "Fig.2C_3.csv",
+             f_name_sbml = "Fig.2C_3.sbml"))
 
 m_c = len(models)
 h = 2.7
@@ -120,6 +131,9 @@ legends=[]
 for m_i, model in enumerate(models):
     step_m, td_m, psi_f = bs.coTrSplCommitment(vpol=50, tr_len=300,
                                        **model["topol"]).values()
+    
+    f_csv = model["f_name_params"]
+    f_sbml = model["f_name_sbml"]
     step_m.set_runtime(1e4)
     td_m.set_runtime(1e4)
     res_type = "ODE"
@@ -127,7 +141,17 @@ for m_i, model in enumerate(models):
     axs[m_i,0].set_xscale("log")
 #    axs[1].set_xscale("log")
     
-    
+    if (create_model_files):
+        if(not os.path.exists(parameters_table_dir)):
+            os.makedirs(parameters_table_dir)
+        step_m.toSBML(os.path.join(sbml_dir,
+                                 re.sub(r"\.sbml", "_step.sbml", f_sbml)))
+        td_m.toSBML(os.path.join(sbml_dir, f_sbml))
+        df, pars = td_m.get_parTimeTable()
+        df_filtered = df[["from", "to"] + pars]
+        df_filtered.to_csv(os.path.join(parameters_table_dir, f_csv))
+        df.to_csv(os.path.join(parameters_table_dir,
+                               re.sub(r"\.csv", "_filtered.csv", f_csv)))
     psis_step = []
     psis_td = []
     psis_analyt = []

@@ -11,11 +11,11 @@ from tkinter import Tk # copy to clipboard function
 
 import types
 import pylab as plt
-
+import os
 import numpy as np
 import scipy as sp
 import scipy.stats as st
-
+import pandas as pd
 import time
 import math
 import sympy 
@@ -92,8 +92,8 @@ class SimParam(SimPlotting, object):
         params["runtime"] = self.runtime
         params["id"] = id(self)
         return params
-    def param_str(self, sep=", "):
-        s = sep.join([k + "=" + "%s" % v for k,v in self.params.items()])
+    def param_str(self, sep=", ", eq_sign = "="):
+        s = sep.join([k + eq_sign + "%s" % v for k,v in self.params.items()])
         return s
     def set_runtime(self, t):
         self.runtime=t
@@ -127,6 +127,30 @@ class SimParam(SimPlotting, object):
 #        self._time_events = sorted(self._time_events)
     def delete_timeEvents(self):
         self._time_events = []
+    def get_parTimeTable(self, parnames = []):
+        t_events = sorted(self._time_events.copy())
+        t_from = 0
+        t_to = 0
+        chd_pars = [] #changed pars
+        res = pd.DataFrame()
+        constants = self._evaluate_pars()
+        
+        for k, te in enumerate(t_events):
+            if(te.t <= self.runtime):
+                t_to = te.t
+                res.at[k, "from"] = t_from
+                res.at[k, "to"] = t_to
+                t_from = t_to
+                for key, val in constants.items():
+                    res.at[k, key] = val
+                chd_pars += te.apply_action(constants)
+        k += 1
+        res.at[k, "from"] = t_from
+        res.at[k, "to"] = self.runtime
+        for key, val in constants.items():
+                    res.at[k, key] = val
+                
+        return res, sorted(list(set(chd_pars)))
     def get_rates(self, state=None, check_pre=True):
         """ state must contain time as first element
         """
@@ -811,6 +835,10 @@ class SimParam(SimPlotting, object):
         
         out = sb.writeSBMLToString(document)
         if file is not None:
+            dir_name = os.path.dirname(file)
+            if not os.path.exists(dir_name):
+                os.makedirs(dir_name)
+            
             text_file = open(file, "w")
             n = text_file.write(out)
             text_file.close()

@@ -312,11 +312,12 @@ def coTrSplMechanistic():
     vpol = 50
     init_mol_count = 100
     
-    u1_1_pos = 210
-    u2_1_pos = 300
-    u1_2_pos = 443
-    u2_2_pos = 520
-    u1_3_pos = 690
+    u2_ex1 = 50
+    u1_ex1 = 210
+    u2_ex2 = 300
+    u1_ex2 = 443
+    u2_ex3 = 520
+    u1_ex3 = 690
     
     #exon definition rates
     k1 = 1
@@ -327,19 +328,20 @@ def coTrSplMechanistic():
     k2_i = 0
     k3_i = 0
     
-    k1_inh = "k1_t * (1-rbp_inh*asym_pr(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
-    k2_inh = "k2_t * (1-rbp_inh*asym_pr(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                   * (1-rbp_inh*asym_pr(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
-    k3_inh = "k3_t * (1-rbp_inh*asym_pr(u1_3_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                   * (1-rbp_inh*asym_pr(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k1_inh = "k1_t * (1-rbp_inh*inhFunc(u1_ex1-rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*inhFunc(u2_ex1- rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k2_inh = "k2_t * (1-rbp_inh*inhFunc(u1_ex2- rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*inhFunc(u2_ex2- rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
+    k3_inh = "k3_t * (1-rbp_inh*inhFunc(u1_ex3- rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                   * (1-rbp_inh*inhFunc(u2_ex3- rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))"
     
     
     spl_r = 2 
-    ret_r = 0.001 
+    k_ret = 0.001 
     
     rbp_pos = 480
     rbp_inh = 0.99
-    rbp_bbr = 1e-9 #basal binding rate
+    rbp_bbr = 0 #basal binding rate
 #    rbp_br = 26*k2 #pol2 associated binding rate
     rbp_br = 10 * k1#pol2 associated binding rate
     rbp_br = 0.1  #pol2 associated binding rate
@@ -350,14 +352,15 @@ def coTrSplMechanistic():
     rbp_e_down = 40
     rbp_h_c = 8
     
-    pol_dist = 20 # max nt's after pol can bring somth. to nascRNA
+    pol_range = 20 # max nt's after pol can bring somth. to nascRNA
     params = {"vpol": vpol,
         "gene_len": gene_len,
-        "u1_1_pos": u1_1_pos , # U1 binding site position
-        "u1_2_pos": u1_2_pos ,
-        "u2_1_pos": u2_1_pos, # U2 bind. site pos 1
-        "u2_2_pos": u2_2_pos,
-        "u1_3_pos": u1_3_pos,
+        "u2_ex1": u2_ex1,
+        "u1_ex1": u1_ex1 , # U1 binding site position
+        "u2_ex2": u2_ex2 ,
+        "u1_ex2": u1_ex2, # U2 binding site
+        "u2_ex3": u2_ex3,
+        "u1_ex3": u1_ex3,
         
         "k1": k1_i,
         "k2": k2_i,
@@ -383,11 +386,11 @@ def coTrSplMechanistic():
         "rbp_e_down": rbp_e_down,
         "rbp_h_c": rbp_h_c,
         "rbp_inh": rbp_inh,
-        "pol_dist": pol_dist,
+        "pol_range": pol_range,
         "k_spl_i": spl_r,
         "k_spl_s": spl_r,
-        "ret_r": 0,
-        "ret_r_t": ret_r
+        "k_ret": 0,
+        "k_ret_t": k_ret
         
         }
    
@@ -412,25 +415,25 @@ def coTrSplMechanistic():
     for spec in ["P000", "P001", "P010", "P100", "P011", "P101", "P110", "P111"]:
         spec_i = spec + "_inh"
         s.add_reaction(spec + "*rbp_br", {spec:-1, spec_i:1}, "inh.")
-        s.add_reaction(spec + "*ret_r", {spec:-1, "ret":1}, "retention")
-        s.add_reaction(spec_i + "*ret_r", {spec_i:-1, "ret":1}, "retention")
+        s.add_reaction(spec + "*k_ret", {spec:-1, "ret":1}, "retention")
+        s.add_reaction(spec_i + "*k_ret", {spec_i:-1, "ret":1}, "retention")
     
     s.add_reaction("P111*k_spl_i", {"P111":-1, "Incl": 1}, "inclusion")
     s.add_reaction("P101*k_spl_s", {"P101":-1, "Skip": 1}, "skipping")
 #    s.add_reaction("P111*k_spl_s", {"P111":-1, "Skip": 1}, "skipping")
     
     if spl_inh:
-        s.add_reaction("P111_inh*k_spl_i * (1-rbp_inh*asym_pr(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                       * (1-rbp_inh*asym_pr(u2_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
-                       * (1-rbp_inh*asym_pr(u1_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
-                       * (1-rbp_inh*asym_pr(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+        s.add_reaction("P111_inh*k_spl_i * (1-rbp_inh*inhFunc(u1_ex1- rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                       * (1-rbp_inh*inhFunc(u1_ex2- rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
+                       * (1-rbp_inh*inhFunc(u2_ex2- rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))\
+                       * (1-rbp_inh*inhFunc(u2_ex3- rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
                        {"P111_inh":-1, "Incl":1, "InclInh":1}, "inclusion")
         
-        s.add_reaction("P101_inh*k_spl_s * (1-rbp_inh*asym_pr(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-                       * (1-rbp_inh*asym_pr(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+        s.add_reaction("P101_inh*k_spl_s * (1-rbp_inh*inhFunc(u1_ex1- rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+                       * (1-rbp_inh*inhFunc(u2_ex3- rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
                        {"P101_inh":-1, "Skip":1, "SkipInh":1}, "skipping")
-#        s.add_reaction("P111_inh*k_spl_s * (1-rbp_inh*asym_pr(u1_1_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
-#                       * (1-rbp_inh*asym_pr(u2_2_pos, rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
+#        s.add_reaction("P111_inh*k_spl_s * (1-rbp_inh*inhFunc(u1_ex1- rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c)) \
+#                       * (1-rbp_inh*inhFunc(u2_ex3- rbp_pos, rbp_e_up, rbp_e_down, rbp_h_c))",
 #                       {"P111_inh":-1, "Skip":1, "SkipInh":1}, "skipping")
     else:
         s.add_reaction("P111_inh*k_spl_i",
@@ -442,17 +445,17 @@ def coTrSplMechanistic():
 #                       {"P111_inh":-1, "Skip":1, "SkipInh":1}, "skipping")
     
     
-    x, rbpp , l, r, p = sy.symbols("x rbpp l r p")
-    f_asym_pr_sympy = sy.Piecewise(((1/(1+((rbpp-x)/l)**p)), x-rbpp<0),
-                                   ((1/(1+((x-rbpp)/r)**p)), True))
-    s.add_function(f_asym_pr_sympy, (x, rbpp , l, r, p), "asym_pr")
+    x , l, r, p = sy.symbols("x l r p")
+    f_inhFunc_sympy = sy.Piecewise(((1/(1+((-x)/l)**p)), x<0),
+                                   ((1/(1+((x)/r)**p)), True))
+    s.add_function(f_inhFunc_sympy, (x , l, r, p), "inhFunc")
     
-    te1 = TimeEvent("u1_1_pos/vpol", "k1=k1_t; k1_inh=k1_inh_t", name="Ex1")
-    te2 = TimeEvent("u1_2_pos/vpol", "k2=k2_t; k2_inh=k2_inh_t", name="Ex2")
-    te3 = TimeEvent("u1_3_pos/vpol", "k3=k3_t; k3_inh=k3_inh_t", name="Ex3")
+    te1 = TimeEvent("u1_ex1/vpol", "k1=k1_t; k1_inh=k1_inh_t", name="Ex1")
+    te2 = TimeEvent("u1_ex2/vpol", "k2=k2_t; k2_inh=k2_inh_t", name="Ex2")
+    te3 = TimeEvent("u1_ex3/vpol", "k3=k3_t; k3_inh=k3_inh_t", name="Ex3")
     te4 = TimeEvent("rbp_pos/vpol", "rbp_br=rbp_br_t", name="RBP+")
-    te5 = TimeEvent("(rbp_pos+pol_dist)/vpol", "rbp_br=rbp_bbr", name="RBP-")
-    te6 = TimeEvent("gene_len/vpol", "ret_r = ret_r_t", name="transcr. end")
+    te5 = TimeEvent("(rbp_pos+pol_range)/vpol", "rbp_br=rbp_bbr", name="RBP-")
+    te6 = TimeEvent("gene_len/vpol", "k_ret = k_ret_t", name="transcr. end")
     #
     s.add_timeEvent(te1)
     s.add_timeEvent(te2)
@@ -460,7 +463,7 @@ def coTrSplMechanistic():
     s.add_timeEvent(te4)
     s.add_timeEvent(te5)
     s.add_timeEvent(te6)
-    
+    s.compile()
     return s
 
 def coTrSplCommitment(vpol=50, tr_len=300, l=8, m1=2, m2=3, k=0, n=2,
@@ -474,12 +477,12 @@ def coTrSplCommitment(vpol=50, tr_len=300, l=8, m1=2, m2=3, k=0, n=2,
                           k_elong="vpol*l/tr_len",
                           ki = ki, ks = ks,
                           kesc = kesc, kesc_r = kesc_r),
-                     dict(p1=100, Incl = 0, Skip = 0))
+                     dict(P1=100, Incl = 0, Skip = 0))
     
     # upper chain
     for i in range(1, l):
-        p1 = "p" + str(i)
-        p2 = "p" + str(i+1)
+        p1 = "P" + str(i)
+        p2 = "P" + str(i+1)
         s1.add_reaction("k_elong*" + p1, {p1:-1, p2:1} )
         if i > k:
             s1.add_reaction("ki *" + p1, {p1:-1, "Incl":1})
@@ -489,24 +492,26 @@ def coTrSplCommitment(vpol=50, tr_len=300, l=8, m1=2, m2=3, k=0, n=2,
     # lower chain
     if (m2>0):
         for i in range(m1+1, l):
-            e1 = "e" + str(i)
-            e2 = "e" + str(i+1)
+            e1 = "E" + str(i)
+            e2 = "E" + str(i+1)
             s1.add_reaction("k_elong*" + e1, {e1:-1, e2:1})
     
     #escape transitions
     for i in range(m1, m1+m2):
-        p = "p" + str(i+1)
-        e = "e" + str(i+1)
+        p = "P" + str(i+1)
+        e = "E" + str(i+1)
         s1.add_reaction("kesc*" + p, {p:-1, e:1})
         if (kesc_r > 0):
             s1.add_reaction("kesc_r*" + e, {p:1, e:-1})
     
     #last skipping steps
     for i in range(l-n, l):
-        p = "p" + str(i+1)
-        e = "e" + str(i+1)
+        p = "P" + str(i+1)
         s1.add_reaction("ks*" + p, {p:-1, "Skip":1})
-        s1.add_reaction("ks*" + e, {e:-1, "Skip":1})
+        
+        if(m2>0):
+            e = "E" + str(i+1)
+            s1.add_reaction("ks*" + e, {e:-1, "Skip":1})
         
     
     s1.compile_system()
